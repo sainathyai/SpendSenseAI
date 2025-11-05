@@ -18,4 +18,3 @@ if __name__ == "__main__":
     
     # Run streamlit
     subprocess.run([sys.executable, "-m", "streamlit", "run", dashboard_path])
-
