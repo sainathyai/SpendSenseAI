@@ -1,8 +1,39 @@
 """
-Evaluation module for SpendSenseAI.
+Evaluation Module for SpendSenseAI.
 
-This module measures system performance against success criteria.
+Provides:
+- Metrics & Evaluation Harness
+- Integration Testing & End-to-End Validation
 """
 
-__version__ = "0.1.0"
+from .metrics import (
+    CoverageMetrics,
+    ExplainabilityMetrics,
+    PerformanceMetrics,
+    FairnessMetrics,
+    EvaluationResults,
+    run_evaluation,
+    evaluate_coverage,
+    evaluate_explainability,
+    evaluate_performance,
+    evaluate_fairness,
+    export_metrics_json,
+    export_metrics_csv,
+    generate_summary_report
+)
 
+__all__ = [
+    'CoverageMetrics',
+    'ExplainabilityMetrics',
+    'PerformanceMetrics',
+    'FairnessMetrics',
+    'EvaluationResults',
+    'run_evaluation',
+    'evaluate_coverage',
+    'evaluate_explainability',
+    'evaluate_performance',
+    'evaluate_fairness',
+    'export_metrics_json',
+    'export_metrics_csv',
+    'generate_summary_report'
+]
