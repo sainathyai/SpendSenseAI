@@ -37,6 +37,16 @@ from .recommendation_builder import (
     validate_tone
 )
 
+from .counterfactuals import (
+    CounterfactualScenario,
+    CounterfactualSet,
+    generate_counterfactuals_for_user,
+    format_counterfactual_for_display,
+    calculate_interest_savings,
+    calculate_emergency_fund_timeline,
+    calculate_subscription_savings
+)
+
 __all__ = [
     # Content Catalog
     'EducationContent',
@@ -63,5 +73,14 @@ __all__ = [
     'format_recommendations_for_api',
     'extract_data_citations',
     'generate_rationale',
-    'validate_tone'
+    'validate_tone',
+    
+    # Counterfactuals
+    'CounterfactualScenario',
+    'CounterfactualSet',
+    'generate_counterfactuals_for_user',
+    'format_counterfactual_for_display',
+    'calculate_interest_savings',
+    'calculate_emergency_fund_timeline',
+    'calculate_subscription_savings'
 ]

@@ -22,7 +22,28 @@ from .metrics import (
     generate_summary_report
 )
 
+from .integration_tests import (
+    TestResult,
+    TestReport,
+    run_integration_tests,
+    generate_test_report
+)
+
+from .adversarial_testing import (
+    AdversarialScenario,
+    AdversarialTestReport,
+    test_extreme_utilization,
+    test_sparse_data,
+    test_conflicting_signals,
+    test_nonexistent_user,
+    test_data_quality_issues,
+    run_adversarial_tests,
+    export_adversarial_report,
+    generate_robustness_report
+)
+
 __all__ = [
+    # Metrics
     'CoverageMetrics',
     'ExplainabilityMetrics',
     'PerformanceMetrics',
@@ -35,5 +56,23 @@ __all__ = [
     'evaluate_fairness',
     'export_metrics_json',
     'export_metrics_csv',
-    'generate_summary_report'
+    'generate_summary_report',
+    
+    # Integration Tests
+    'TestResult',
+    'TestReport',
+    'run_integration_tests',
+    'generate_test_report',
+    
+    # Adversarial Testing
+    'AdversarialScenario',
+    'AdversarialTestReport',
+    'test_extreme_utilization',
+    'test_sparse_data',
+    'test_conflicting_signals',
+    'test_nonexistent_user',
+    'test_data_quality_issues',
+    'run_adversarial_tests',
+    'export_adversarial_report',
+    'generate_robustness_report'
 ]

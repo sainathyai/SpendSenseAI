@@ -36,6 +36,19 @@ from .decision_trace import (
     export_trace_to_json
 )
 
+from .bias_detection import (
+    DemographicGroup,
+    FairnessMetrics,
+    BiasReport,
+    analyze_demographic_parity,
+    detect_disparate_impact,
+    check_calibration,
+    generate_bias_mitigation_recommendations,
+    run_bias_detection,
+    export_bias_report,
+    generate_fairness_audit_report
+)
+
 __all__ = [
     # Consent Management
     'ConsentStatus',
@@ -63,5 +76,17 @@ __all__ = [
     'get_decision_traces_for_user',
     'get_pending_reviews',
     'update_review_status',
-    'export_trace_to_json'
+    'export_trace_to_json',
+    
+    # Bias Detection
+    'DemographicGroup',
+    'FairnessMetrics',
+    'BiasReport',
+    'analyze_demographic_parity',
+    'detect_disparate_impact',
+    'check_calibration',
+    'generate_bias_mitigation_recommendations',
+    'run_bias_detection',
+    'export_bias_report',
+    'generate_fairness_audit_report'
 ]
