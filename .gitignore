@@ -53,6 +53,8 @@ venv.bak/
 data/raw/*.csv
 data/raw/*.json
 data/processed/*.parquet
+data/processed/*.csv
+data/processed/*.json
 !data/raw/sample_*.csv
 !data/raw/sample_*.json
 
