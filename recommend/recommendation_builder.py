@@ -12,6 +12,7 @@ Generates plain-language explanations with data citations:
 from typing import List, Dict, Optional, Tuple
 from datetime import date
 from dataclasses import dataclass
+import logging
 
 from personas.persona_definition import PersonaAssignment, PersonaType
 from features.subscription_detection import detect_subscriptions_for_customer
@@ -21,6 +22,7 @@ from features.income_stability import analyze_income_stability_for_customer
 from recommend.content_catalog import get_content_for_persona, EducationContent
 from recommend.partner_offers import get_eligible_offers_for_persona, PartnerOffer
 from recommend.counterfactuals import generate_counterfactual_scenarios, CounterfactualScenario
+from recommend.llm_generator import generate_rationale_with_llm, Tone, get_llm_generator
 from guardrails.consent import verify_consent, ConsentScope
 
 
@@ -123,7 +125,7 @@ def extract_data_citations(
     return citations
 
 
-def generate_rationale(
+def generate_rationale_template(
     persona_type: PersonaType,
     recommendation_type: str,
     data_citations: Dict,
@@ -131,7 +133,7 @@ def generate_rationale(
     offer: Optional[PartnerOffer] = None
 ) -> str:
     """
-    Generate plain-language rationale for a recommendation.
+    Generate plain-language rationale using templates (fallback method).
     
     Args:
         persona_type: PersonaType enum value
@@ -278,6 +280,72 @@ def validate_tone(rationale: str) -> bool:
             return False
     
     return True
+
+
+def generate_rationale(
+    persona_type: PersonaType,
+    recommendation_type: str,
+    data_citations: Dict,
+    content: Optional[EducationContent] = None,
+    offer: Optional[PartnerOffer] = None,
+    tone: Tone = Tone.SUPPORTIVE,
+    use_llm: bool = True
+) -> str:
+    """
+    Generate plain-language rationale for a recommendation using LLM with tone control.
+    
+    Args:
+        persona_type: PersonaType enum value
+        recommendation_type: 'education' or 'offer'
+        data_citations: Dictionary with supporting data
+        content: Optional EducationContent object
+        offer: Optional PartnerOffer object
+        tone: Tone enum value (default: SUPPORTIVE)
+        use_llm: Whether to use LLM (default: True, falls back to templates if LLM unavailable)
+        
+    Returns:
+        Plain-language rationale string
+    """
+    # Prepare fallback generator function
+    def fallback_generator():
+        return generate_rationale_template(
+            persona_type, recommendation_type, data_citations, content, offer
+        )
+    
+    # Use LLM if enabled
+    if use_llm:
+        try:
+            # Determine appropriate tone based on persona
+            if persona_type == PersonaType.FINANCIAL_FRAGILITY:
+                tone = Tone.GENTLE  # Use gentler tone for fragile situations
+            elif persona_type == PersonaType.SAVINGS_BUILDER:
+                tone = Tone.EMPOWERING  # Empowering tone for positive progress
+            
+            # Generate using LLM
+            rationale = generate_rationale_with_llm(
+                recommendation_type=recommendation_type,
+                data_citations=data_citations,
+                tone=tone,
+                persona_type=persona_type.value,
+                content_title=content.title if content else None,
+                content_description=content.description if content else None,
+                offer_title=offer.title if offer else None,
+                offer_description=offer.description if offer else None,
+                fallback_generator=fallback_generator
+            )
+            
+            # Validate tone
+            if not validate_tone(rationale):
+                logging.warning(f"LLM-generated rationale failed tone validation, using fallback")
+                return fallback_generator()
+            
+            return rationale
+        except Exception as e:
+            logging.error(f"LLM generation failed: {str(e)}, using fallback")
+            return fallback_generator()
+    
+    # Use template-based generation
+    return fallback_generator()
 
 
 def build_recommendations(

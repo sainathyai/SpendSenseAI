@@ -34,7 +34,16 @@ from .recommendation_builder import (
     format_recommendations_for_api,
     extract_data_citations,
     generate_rationale,
+    generate_rationale_template,
     validate_tone
+)
+
+from .llm_generator import (
+    Tone,
+    LLMConfig,
+    LLMTextGenerator,
+    get_llm_generator,
+    generate_rationale_with_llm
 )
 
 from .counterfactuals import (
@@ -98,7 +107,15 @@ __all__ = [
     'format_recommendations_for_api',
     'extract_data_citations',
     'generate_rationale',
+    'generate_rationale_template',
     'validate_tone',
+    
+    # LLM Generator
+    'Tone',
+    'LLMConfig',
+    'LLMTextGenerator',
+    'get_llm_generator',
+    'generate_rationale_with_llm',
     
     # Counterfactuals
     'CounterfactualScenario',

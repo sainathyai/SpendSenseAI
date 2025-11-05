@@ -39,3 +39,6 @@ isort>=5.12.0  # Import sorting
 mkdocs>=1.5.0  # Optional: for building docs
 mkdocs-material>=9.4.0  # Optional: Material theme for docs
 
+# LLM Integration
+openai>=1.12.0  # OpenAI API for tone-controlled text generation
+
