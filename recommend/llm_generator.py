@@ -21,6 +21,19 @@ except ImportError:
     OPENAI_AVAILABLE = False
     logging.warning("OpenAI package not installed. LLM generation will fall back to templates.")
 
+# AWS integrations (optional)
+try:
+    from .aws_secrets import get_openai_api_key_from_aws
+    AWS_SECRETS_AVAILABLE = True
+except ImportError:
+    AWS_SECRETS_AVAILABLE = False
+
+try:
+    from .aws_lambda_proxy import invoke_openai_via_lambda
+    AWS_LAMBDA_AVAILABLE = True
+except ImportError:
+    AWS_LAMBDA_AVAILABLE = False
+
 
 class Tone(str, Enum):
     """Tone options for text generation."""
@@ -41,6 +54,9 @@ class LLMConfig:
     timeout: int = 10  # seconds
     enable_llm: bool = True
     fallback_to_templates: bool = True
+    # Security options
+    use_aws_secrets: bool = False  # Use AWS Secrets Manager for API key
+    use_lambda_proxy: bool = False  # Use Lambda proxy for API calls
 
 
 class LLMTextGenerator:
@@ -56,28 +72,45 @@ class LLMTextGenerator:
         self.config = config or self._load_config()
         self.client = None
         
+        # Determine API key source (most secure to least secure)
+        api_key = None
+        
         if self.config.enable_llm and OPENAI_AVAILABLE:
-            if self.config.api_key:
-                self.client = OpenAI(api_key=self.config.api_key, timeout=self.config.timeout)
-            else:
-                api_key = os.getenv("OPENAI_API_KEY")
+            # Option 1: AWS Secrets Manager (most secure)
+            if self.config.use_aws_secrets and AWS_SECRETS_AVAILABLE:
+                api_key = get_openai_api_key_from_aws()
                 if api_key:
-                    self.client = OpenAI(api_key=api_key, timeout=self.config.timeout)
+                    logging.info("Using OpenAI API key from AWS Secrets Manager")
+            
+            # Option 2: Direct API key (config or env)
+            if not api_key:
+                if self.config.api_key:
+                    api_key = self.config.api_key
                 else:
-                    logging.warning("OpenAI API key not found. LLM generation disabled.")
-                    self.config.enable_llm = False
+                    api_key = os.getenv("OPENAI_API_KEY")
+                    if api_key:
+                        logging.info("Using OpenAI API key from environment variable")
+            
+            # Initialize OpenAI client if we have a key
+            if api_key:
+                self.client = OpenAI(api_key=api_key, timeout=self.config.timeout)
+            else:
+                logging.warning("OpenAI API key not found. LLM generation disabled.")
+                self.config.enable_llm = False
     
     @staticmethod
     def _load_config() -> LLMConfig:
         """Load configuration from environment variables."""
         return LLMConfig(
-            api_key=os.getenv("OPENAI_API_KEY"),
+            api_key=os.getenv("OPENAI_API_KEY"),  # Only used if AWS Secrets not enabled
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "200")),
             temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
             timeout=int(os.getenv("OPENAI_TIMEOUT", "10")),
             enable_llm=os.getenv("ENABLE_LLM", "true").lower() == "true",
-            fallback_to_templates=os.getenv("LLM_FALLBACK_TO_TEMPLATES", "true").lower() == "true"
+            fallback_to_templates=os.getenv("LLM_FALLBACK_TO_TEMPLATES", "true").lower() == "true",
+            use_aws_secrets=os.getenv("USE_AWS_SECRETS", "false").lower() == "true",
+            use_lambda_proxy=os.getenv("USE_LAMBDA_PROXY", "false").lower() == "true"
         )
     
     def _get_tone_prompt(self, tone: Tone) -> str:

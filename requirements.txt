@@ -42,3 +42,6 @@ mkdocs-material>=9.4.0  # Optional: Material theme for docs
 # LLM Integration
 openai>=1.12.0  # OpenAI API for tone-controlled text generation
 
+# AWS Integration (optional, for production security)
+boto3>=1.34.0  # AWS SDK for Secrets Manager and Lambda proxy
+
