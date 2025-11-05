@@ -1,0 +1,48 @@
+{
+  // Terminal Configuration - Set Git Bash as default
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  
+  // Terminal Profiles
+  "terminal.integrated.profiles.windows": {
+    "Git Bash": {
+      "path": "C:\\Program Files\\Git\\bin\\bash.exe",
+      "icon": "terminal-bash",
+      "args": []
+    },
+    "PowerShell": {
+      "path": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    },
+    "Command Prompt": {
+      "path": "C:\\WINDOWS\\System32\\cmd.exe"
+    }
+  },
+  
+  // Auto-create terminal in Git Bash
+  "terminal.integrated.automationProfile.windows": {
+    "path": "C:\\Program Files\\Git\\bin\\bash.exe"
+  },
+  
+  // Git Bash settings
+  "terminal.integrated.shell.windows": "C:\\Program Files\\Git\\bin\\bash.exe",
+  
+  // File associations for better Git Bash experience
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  
+  // Python settings (for this project)
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/Scripts/python.exe",
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  
+  // Editor settings
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true
+  },
+  
+  // File exclusions for Git Bash paths
+  "files.exclude": {
+    "**/.git": false
+  }
+}
+
