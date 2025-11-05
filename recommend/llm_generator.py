@@ -262,18 +262,37 @@ Remember: This is educational content, not financial advice. Be helpful, clear, 
                 offer_description=offer_description
             )
             
-            # Call OpenAI API
-            response = self.client.chat.completions.create(
-                model=self.config.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature
-            )
+            # Option 1: Use Lambda proxy (most secure for API calls)
+            if self.config.use_lambda_proxy and AWS_LAMBDA_AVAILABLE:
+                rationale = invoke_openai_via_lambda(
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature,
+                    model=self.config.model
+                )
+                
+                if rationale:
+                    rationale = rationale.strip()
+                else:
+                    raise Exception("Lambda proxy returned empty response")
             
-            rationale = response.choices[0].message.content.strip()
+            # Option 2: Direct OpenAI API call
+            else:
+                if not self.client:
+                    raise Exception("OpenAI client not initialized")
+                
+                response = self.client.chat.completions.create(
+                    model=self.config.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=self.config.max_tokens,
+                    temperature=self.config.temperature
+                )
+                
+                rationale = response.choices[0].message.content.strip()
             
             # Validate tone (basic check)
             if not self._validate_tone(rationale):
