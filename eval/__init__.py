@@ -58,6 +58,21 @@ from .effectiveness_tracking import (
     generate_effectiveness_report
 )
 
+from .cohort_analysis import (
+    CohortDimension,
+    CohortDefinition,
+    CohortMetrics,
+    CohortAnalysis,
+    create_age_cohorts,
+    create_income_cohorts,
+    create_persona_cohorts,
+    calculate_cohort_metrics,
+    analyze_fairness_across_cohorts,
+    run_cohort_analysis,
+    export_cohort_report,
+    generate_cohort_report
+)
+
 __all__ = [
     # Metrics
     'CoverageMetrics',
