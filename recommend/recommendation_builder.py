@@ -20,6 +20,7 @@ from features.savings_pattern import analyze_savings_patterns_for_customer
 from features.income_stability import analyze_income_stability_for_customer
 from recommend.content_catalog import get_content_for_persona, EducationContent
 from recommend.partner_offers import get_eligible_offers_for_persona, PartnerOffer
+from guardrails.consent import verify_consent, ConsentScope
 
 
 @dataclass
@@ -276,7 +277,9 @@ def build_recommendations(
     db_path: str,
     persona_assignment: PersonaAssignment,
     estimated_income: float = 0.0,
-    estimated_credit_score: int = 700
+    estimated_credit_score: int = 700,
+    check_consent: bool = True,
+    grace_period_days: int = 0
 ) -> RecommendationSet:
     """
     Build complete recommendation set for a customer.
@@ -287,10 +290,31 @@ def build_recommendations(
         persona_assignment: PersonaAssignment object
         estimated_income: Estimated annual income
         estimated_credit_score: Estimated credit score
+        check_consent: Whether to verify consent before building recommendations
+        grace_period_days: Grace period in days after consent revocation
         
     Returns:
-        RecommendationSet object
+        RecommendationSet object (empty if consent check fails)
     """
+    # Check consent if required
+    if check_consent:
+        is_consented, reason = verify_consent(
+            customer_id,
+            db_path,
+            required_scope=ConsentScope.ALL,
+            grace_period_days=grace_period_days
+        )
+        
+        if not is_consented:
+            # Return empty recommendations if consent check fails
+            return RecommendationSet(
+                customer_id=customer_id,
+                persona_assignment=persona_assignment,
+                education_items=[],
+                partner_offers=[],
+                generated_at=date.today()
+            )
+    
     if not persona_assignment.primary_persona:
         # No persona matched, return empty recommendations
         return RecommendationSet(

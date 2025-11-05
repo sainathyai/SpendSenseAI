@@ -1,9 +1,67 @@
 """
-Guardrails module for SpendSenseAI.
+Guardrails & Compliance for SpendSenseAI.
 
-This module enforces consent, eligibility, and tone requirements
-to ensure safe and compliant recommendations.
+Provides:
+- Consent Management System
+- Decision Trace Logging System
 """
 
-__version__ = "0.1.0"
+from .consent import (
+    ConsentStatus,
+    ConsentScope,
+    ConsentRecord,
+    ConsentAuditEntry,
+    create_consent_tables,
+    grant_consent,
+    revoke_consent,
+    get_consent,
+    verify_consent,
+    get_consent_audit_trail,
+    get_all_consents_for_user
+)
 
+from .decision_trace import (
+    ReviewStatus,
+    SignalTrace,
+    PersonaTrace,
+    RecommendationTrace,
+    DecisionTrace,
+    create_decision_trace_tables,
+    create_decision_trace,
+    save_decision_trace,
+    get_decision_trace,
+    get_decision_traces_for_user,
+    get_pending_reviews,
+    update_review_status,
+    export_trace_to_json
+)
+
+__all__ = [
+    # Consent Management
+    'ConsentStatus',
+    'ConsentScope',
+    'ConsentRecord',
+    'ConsentAuditEntry',
+    'create_consent_tables',
+    'grant_consent',
+    'revoke_consent',
+    'get_consent',
+    'verify_consent',
+    'get_consent_audit_trail',
+    'get_all_consents_for_user',
+    
+    # Decision Trace
+    'ReviewStatus',
+    'SignalTrace',
+    'PersonaTrace',
+    'RecommendationTrace',
+    'DecisionTrace',
+    'create_decision_trace_tables',
+    'create_decision_trace',
+    'save_decision_trace',
+    'get_decision_trace',
+    'get_decision_traces_for_user',
+    'get_pending_reviews',
+    'update_review_status',
+    'export_trace_to_json'
+]
