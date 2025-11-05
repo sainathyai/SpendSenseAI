@@ -5,7 +5,7 @@ numpy>=1.24.0
 pyarrow>=12.0.0  # For Parquet support
 
 # Database
-sqlite3  # Standard library, but documented here
+# sqlite3 is built into Python standard library, no installation needed
 
 # API Framework (choose one)
 fastapi>=0.104.0
