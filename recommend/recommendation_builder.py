@@ -20,6 +20,7 @@ from features.savings_pattern import analyze_savings_patterns_for_customer
 from features.income_stability import analyze_income_stability_for_customer
 from recommend.content_catalog import get_content_for_persona, EducationContent
 from recommend.partner_offers import get_eligible_offers_for_persona, PartnerOffer
+from recommend.counterfactuals import generate_counterfactual_scenarios, CounterfactualScenario
 from guardrails.consent import verify_consent, ConsentScope
 
 
@@ -48,8 +49,15 @@ class RecommendationSet:
     persona_assignment: PersonaAssignment
     education_items: List[RecommendationItem]  # 3-5 items
     partner_offers: List[RecommendationItem]  # 1-3 items
-    generated_at: date
+    counterfactual_scenarios: List[CounterfactualScenario] = None  # Optional counterfactuals
+    generated_at: date = None
     disclaimer: str = "This information is for educational purposes only and does not constitute financial advice. Please consult with a qualified financial advisor before making financial decisions."
+    
+    def __post_init__(self):
+        if self.generated_at is None:
+            self.generated_at = date.today()
+        if self.counterfactual_scenarios is None:
+            self.counterfactual_scenarios = []
 
 
 def extract_data_citations(
@@ -363,6 +371,9 @@ def build_recommendations(
         estimated_credit_score=estimated_credit_score
     )
     
+    # Generate counterfactual scenarios
+    counterfactual_scenarios = generate_counterfactual_scenarios(customer_id, db_path)
+    
     # Build partner offer recommendations
     partner_items = []
     for i, offer in enumerate(eligible_offers[:3]):  # Max 3 offers
@@ -390,6 +401,7 @@ def build_recommendations(
         persona_assignment=persona_assignment,
         education_items=education_items,
         partner_offers=partner_items,
+        counterfactual_scenarios=counterfactual_scenarios,
         generated_at=date.today()
     )
 
@@ -434,6 +446,19 @@ def format_recommendations_for_api(recommendation_set: RecommendationSet) -> Dic
                 'priority': rec.priority
             }
             for rec in recommendation_set.partner_offers
+        ],
+        'counterfactual_scenarios': [
+            {
+                'scenario_id': cf.scenario_id,
+                'title': cf.title,
+                'description': cf.description,
+                'current_state': cf.current_state,
+                'hypothetical_state': cf.hypothetical_state,
+                'impact': cf.impact,
+                'time_to_achieve': cf.time_to_achieve,
+                'confidence': cf.confidence
+            }
+            for cf in recommendation_set.counterfactual_scenarios
         ],
         'disclaimer': recommendation_set.disclaimer
     }

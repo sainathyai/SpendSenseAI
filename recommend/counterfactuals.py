@@ -8,8 +8,8 @@ Shows "what if" scenarios to increase trust:
 """
 
 from typing import List, Dict, Optional, Any
+from datetime import date, timedelta
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from math import ceil
 
 from personas.persona_definition import PersonaType
@@ -28,148 +28,162 @@ class CounterfactualScenario:
     description: str
     current_state: Dict[str, Any]
     hypothetical_state: Dict[str, Any]
-    projected_outcome: Dict[str, Any]
-    time_to_achieve: Optional[str] = None  # e.g., "6 months", "12 months"
-    confidence: float = 0.0  # Confidence in projection
-
-
-@dataclass
-class CounterfactualSet:
-    """Set of counterfactual scenarios for a user."""
-    user_id: str
-    scenarios: List[CounterfactualScenario]
-    generated_at: datetime
+    impact: Dict[str, Any]
+    time_to_achieve: Optional[str] = None
+    confidence: float = 0.0
 
 
 def calculate_interest_savings(
-    current_utilization: float,
-    target_utilization: float,
     current_balance: float,
-    current_limit: float,
-    apr: float = 0.20  # Default 20% APR
+    current_utilization: float,
+    credit_limit: float,
+    current_apr: float,
+    target_utilization: float = 0.30
 ) -> Dict[str, Any]:
     """
-    Calculate interest savings from reducing utilization.
+    Calculate interest savings if utilization is reduced.
     
     Args:
+        current_balance: Current credit card balance
         current_utilization: Current utilization percentage
-        target_utilization: Target utilization percentage
-        current_balance: Current balance
-        current_limit: Credit limit
-        apr: Annual percentage rate
+        credit_limit: Credit limit
+        current_apr: Current APR (annual percentage rate)
+        target_utilization: Target utilization (default: 30%)
         
     Returns:
         Dictionary with savings calculations
     """
-    current_monthly_interest = (current_balance * apr / 12) / 100
-    target_balance = (target_utilization / 100) * current_limit
-    target_monthly_interest = (target_balance * apr / 12) / 100
+    target_balance = credit_limit * target_utilization
+    balance_reduction = current_balance - target_balance
     
-    monthly_savings = current_monthly_interest - target_monthly_interest
-    annual_savings = monthly_savings * 12
+    if balance_reduction <= 0:
+        return {
+            "savings": 0.0,
+            "monthly_interest_savings": 0.0,
+            "annual_interest_savings": 0.0,
+            "balance_reduction": 0.0
+        }
     
-    # Calculate time to pay down (assuming fixed payment)
-    balance_reduction_needed = current_balance - target_balance
-    # Assume 2% minimum payment or $25 minimum
-    min_payment = max(current_balance * 0.02, 25)
-    # Payment beyond interest
-    principal_payment = min_payment - current_monthly_interest
+    # Calculate monthly interest (APR / 12)
+    monthly_apr = current_apr / 12 / 100
     
-    if principal_payment > 0:
-        months_to_target = ceil(balance_reduction_needed / principal_payment)
-    else:
-        months_to_target = None
+    # Current monthly interest
+    current_monthly_interest = current_balance * monthly_apr
+    
+    # Target monthly interest
+    target_monthly_interest = target_balance * monthly_apr
+    
+    # Monthly savings
+    monthly_interest_savings = current_monthly_interest - target_monthly_interest
+    
+    # Annual savings
+    annual_interest_savings = monthly_interest_savings * 12
     
     return {
+        "savings": balance_reduction,
+        "monthly_interest_savings": monthly_interest_savings,
+        "annual_interest_savings": annual_interest_savings,
+        "balance_reduction": balance_reduction,
         "current_monthly_interest": current_monthly_interest,
-        "target_monthly_interest": target_monthly_interest,
-        "monthly_savings": monthly_savings,
-        "annual_savings": annual_savings,
-        "months_to_target": months_to_target,
-        "balance_reduction_needed": balance_reduction_needed
+        "target_monthly_interest": target_monthly_interest
     }
 
 
 def calculate_emergency_fund_timeline(
     current_savings: float,
-    monthly_savings_amount: float,
+    monthly_savings: float,
     target_months: float = 3.0,
-    monthly_expenses: Optional[float] = None
+    average_monthly_expenses: float = 0.0
 ) -> Dict[str, Any]:
     """
-    Calculate timeline to build emergency fund.
+    Calculate timeline to reach emergency fund goal.
     
     Args:
         current_savings: Current savings balance
-        monthly_savings_amount: Amount saved per month
-        target_months: Target months of expenses (default: 3)
-        monthly_expenses: Average monthly expenses (if None, estimated from savings)
+        monthly_savings: Amount saved per month
+        target_months: Target emergency fund in months of expenses
+        average_monthly_expenses: Average monthly expenses
         
     Returns:
         Dictionary with timeline calculations
     """
-    if monthly_expenses is None:
-        # Estimate monthly expenses as 1/12 of savings (rough estimate)
-        monthly_expenses = current_savings / 12 if current_savings > 0 else 1000
+    if average_monthly_expenses <= 0:
+        # Estimate from savings if expenses not provided
+        average_monthly_expenses = current_savings / 3.0 if current_savings > 0 else 2000.0
     
-    target_emergency_fund = monthly_expenses * target_months
-    remaining_needed = target_emergency_fund - current_savings
+    target_emergency_fund = average_monthly_expenses * target_months
+    remaining_needed = max(0, target_emergency_fund - current_savings)
     
-    if monthly_savings_amount > 0:
-        months_to_target = ceil(remaining_needed / monthly_savings_amount)
-    else:
-        months_to_target = None
+    if monthly_savings <= 0:
+        return {
+            "target_emergency_fund": target_emergency_fund,
+            "current_savings": current_savings,
+            "remaining_needed": remaining_needed,
+            "months_to_goal": None,
+            "achievable": False
+        }
+    
+    months_to_goal = ceil(remaining_needed / monthly_savings)
     
     return {
-        "current_savings": current_savings,
         "target_emergency_fund": target_emergency_fund,
+        "current_savings": current_savings,
         "remaining_needed": remaining_needed,
-        "monthly_savings_amount": monthly_savings_amount,
-        "months_to_target": months_to_target,
-        "target_months": target_months
+        "months_to_goal": months_to_goal,
+        "achievable": True,
+        "monthly_savings_needed": remaining_needed / months_to_goal if months_to_goal > 0 else 0
     }
 
 
 def calculate_subscription_savings(
     subscriptions: List[Any],
-    subscriptions_to_cancel: List[str]
+    subscriptions_to_cancel: Optional[List[str]] = None
 ) -> Dict[str, Any]:
     """
     Calculate savings from canceling subscriptions.
     
     Args:
-        subscriptions: List of subscription patterns
-        subscriptions_to_cancel: List of subscription merchant names to cancel
+        subscriptions: List of subscription objects
+        subscriptions_to_cancel: Optional list of subscription IDs to cancel
         
     Returns:
         Dictionary with savings calculations
     """
-    total_monthly_savings = 0.0
-    canceled_subscriptions = []
+    if not subscriptions:
+        return {
+            "total_subscriptions": 0,
+            "monthly_savings": 0.0,
+            "annual_savings": 0.0,
+            "subscriptions_to_cancel": []
+        }
     
-    for subscription in subscriptions:
-        if subscription.merchant_name in subscriptions_to_cancel:
-            monthly_spend = subscription.monthly_recurring_spend
-            total_monthly_savings += monthly_spend
-            canceled_subscriptions.append({
-                "merchant": subscription.merchant_name,
-                "monthly_savings": monthly_spend
-            })
+    if subscriptions_to_cancel is None:
+        # Cancel top 3 most expensive subscriptions
+        sorted_subscriptions = sorted(
+            subscriptions,
+            key=lambda s: getattr(s, 'monthly_recurring_spend', 0),
+            reverse=True
+        )
+        subscriptions_to_cancel = sorted_subscriptions[:3]
     
-    annual_savings = total_monthly_savings * 12
+    monthly_savings = sum(
+        getattr(sub, 'monthly_recurring_spend', 0) for sub in subscriptions_to_cancel
+    )
+    annual_savings = monthly_savings * 12
     
     return {
-        "canceled_count": len(canceled_subscriptions),
-        "monthly_savings": total_monthly_savings,
+        "total_subscriptions": len(subscriptions),
+        "subscriptions_to_cancel": len(subscriptions_to_cancel),
+        "monthly_savings": monthly_savings,
         "annual_savings": annual_savings,
-        "canceled_subscriptions": canceled_subscriptions
+        "subscription_names": [getattr(sub, 'merchant_name', 'Unknown') for sub in subscriptions_to_cancel]
     }
 
 
-def generate_counterfactuals_for_user(
+def generate_counterfactual_scenarios(
     user_id: str,
     db_path: str
-) -> CounterfactualSet:
+) -> List[CounterfactualScenario]:
     """
     Generate counterfactual scenarios for a user.
     
@@ -178,7 +192,7 @@ def generate_counterfactuals_for_user(
         db_path: Path to SQLite database
         
     Returns:
-        CounterfactualSet object
+        List of CounterfactualScenario objects
     """
     scenarios = []
     
@@ -186,42 +200,42 @@ def generate_counterfactuals_for_user(
     try:
         card_metrics, agg_metrics = analyze_credit_utilization_for_customer(user_id, db_path, 30)
         
-        if card_metrics and agg_metrics.aggregate_utilization > 30:
-            current_utilization = agg_metrics.aggregate_utilization
-            current_balance = sum(card.balance for card in card_metrics)
-            current_limit = sum(card.limit for card in card_metrics)
+        if card_metrics and len(card_metrics) > 0:
+            card = card_metrics[0]
+            current_utilization = card.utilization_percentage / 100
             
-            # Calculate savings if utilization reduced to 30%
-            savings = calculate_interest_savings(
-                current_utilization, 30.0, current_balance, current_limit
-            )
-            
-            if savings["monthly_savings"] > 0:
-                time_to_achieve = f"{savings['months_to_target']} months" if savings['months_to_target'] else "Unknown"
-                
-                scenario = CounterfactualScenario(
-                    scenario_id=f"CF-{user_id}-UTIL-001",
-                    title="Reduce Credit Utilization to 30%",
-                    description=f"If you reduced your credit utilization from {current_utilization:.1f}% to 30%, you could save on interest charges.",
-                    current_state={
-                        "utilization": current_utilization,
-                        "monthly_interest": savings["current_monthly_interest"],
-                        "balance": current_balance
-                    },
-                    hypothetical_state={
-                        "utilization": 30.0,
-                        "monthly_interest": savings["target_monthly_interest"],
-                        "balance": savings["balance_reduction_needed"]
-                    },
-                    projected_outcome={
-                        "monthly_savings": savings["monthly_savings"],
-                        "annual_savings": savings["annual_savings"],
-                        "interest_reduction": savings["current_monthly_interest"] - savings["target_monthly_interest"]
-                    },
-                    time_to_achieve=time_to_achieve,
-                    confidence=0.8
+            if current_utilization > 0.30:
+                # Assume average APR of 22%
+                interest_savings = calculate_interest_savings(
+                    card.balance,
+                    current_utilization,
+                    card.limit,
+                    current_apr=22.0,
+                    target_utilization=0.30
                 )
-                scenarios.append(scenario)
+                
+                if interest_savings["annual_interest_savings"] > 0:
+                    scenarios.append(CounterfactualScenario(
+                        scenario_id="CF-UTIL-001",
+                        title="Reduce Credit Utilization to 30%",
+                        description=f"If you reduce your credit utilization from {current_utilization:.1%} to 30%, you could save on interest.",
+                        current_state={
+                            "utilization": f"{current_utilization:.1%}",
+                            "balance": card.balance,
+                            "monthly_interest": interest_savings["current_monthly_interest"]
+                        },
+                        hypothetical_state={
+                            "utilization": "30%",
+                            "balance": card.balance - interest_savings["balance_reduction"],
+                            "monthly_interest": interest_savings["target_monthly_interest"]
+                        },
+                        impact={
+                            "monthly_interest_savings": interest_savings["monthly_interest_savings"],
+                            "annual_interest_savings": interest_savings["annual_interest_savings"],
+                            "balance_reduction_needed": interest_savings["balance_reduction"]
+                        },
+                        confidence=0.85
+                    ))
     except Exception:
         pass
     
@@ -233,117 +247,74 @@ def generate_counterfactuals_for_user(
             current_savings = savings_metrics.total_savings_balance
             monthly_inflow = savings_metrics.average_monthly_inflow
             
-            # Calculate timeline to 3-month emergency fund
+            # Estimate monthly expenses from savings balance
+            if current_savings > 0:
+                estimated_expenses = current_savings / 3.0
+            else:
+                estimated_expenses = 2000.0
+            
             timeline = calculate_emergency_fund_timeline(
-                current_savings, monthly_inflow, target_months=3.0
+                current_savings=current_savings,
+                monthly_savings=max(monthly_inflow, 200.0),  # Minimum $200/month
+                target_months=3.0,
+                average_monthly_expenses=estimated_expenses
             )
             
-            if timeline["months_to_target"]:
-                scenario = CounterfactualScenario(
-                    scenario_id=f"CF-{user_id}-EMERG-001",
+            if timeline["achievable"] and timeline["months_to_goal"]:
+                scenarios.append(CounterfactualScenario(
+                    scenario_id="CF-EMERG-001",
                     title="Build 3-Month Emergency Fund",
-                    description=f"If you continue saving ${monthly_inflow:.2f} per month, you could build a 3-month emergency fund.",
+                    description=f"If you save ${max(monthly_inflow, 200.0):.0f} per month, you can build a 3-month emergency fund.",
                     current_state={
                         "current_savings": current_savings,
-                        "monthly_savings": monthly_inflow
+                        "monthly_savings": monthly_inflow,
+                        "emergency_fund_coverage": f"{(current_savings / estimated_expenses):.1f} months"
                     },
                     hypothetical_state={
                         "target_emergency_fund": timeline["target_emergency_fund"],
-                        "monthly_savings": monthly_inflow
+                        "monthly_savings": max(monthly_inflow, 200.0)
                     },
-                    projected_outcome={
-                        "months_to_target": timeline["months_to_target"],
-                        "target_amount": timeline["target_emergency_fund"]
+                    impact={
+                        "months_to_goal": timeline["months_to_goal"],
+                        "target_emergency_fund": timeline["target_emergency_fund"]
                     },
-                    time_to_achieve=f"{timeline['months_to_target']} months",
-                    confidence=0.7
-                )
-                scenarios.append(scenario)
+                    time_to_achieve=f"{timeline['months_to_goal']} months",
+                    confidence=0.80
+                ))
     except Exception:
         pass
     
-    # Scenario 3: Subscription cancellation
+    # Scenario 3: Subscription cancellation savings
     try:
         subscriptions, sub_metrics = detect_subscriptions_for_customer(user_id, db_path, window_days=90)
         
         if subscriptions and len(subscriptions) >= 3:
-            # Suggest canceling top 3 subscriptions
-            top_subscriptions = sorted(subscriptions, key=lambda s: s.monthly_recurring_spend, reverse=True)[:3]
-            subscriptions_to_cancel = [s.merchant_name for s in top_subscriptions]
-            
-            savings = calculate_subscription_savings(subscriptions, subscriptions_to_cancel)
+            savings = calculate_subscription_savings(subscriptions)
             
             if savings["annual_savings"] > 0:
-                scenario = CounterfactualScenario(
-                    scenario_id=f"CF-{user_id}-SUB-001",
-                    title=f"Cancel Top {savings['canceled_count']} Subscriptions",
-                    description=f"If you canceled your top {savings['canceled_count']} subscriptions, you could save annually.",
+                scenarios.append(CounterfactualScenario(
+                    scenario_id="CF-SUB-001",
+                    title="Cancel Top 3 Subscriptions",
+                    description=f"If you cancel your top 3 subscriptions, you could save significant money annually.",
                     current_state={
-                        "subscription_count": len(subscriptions),
+                        "total_subscriptions": savings["total_subscriptions"],
                         "monthly_spend": sub_metrics.get("total_monthly_recurring_spend", 0)
                     },
                     hypothetical_state={
-                        "canceled_count": savings["canceled_count"],
+                        "subscriptions_to_cancel": savings["subscriptions_to_cancel"],
                         "monthly_savings": savings["monthly_savings"]
                     },
-                    projected_outcome={
+                    impact={
                         "monthly_savings": savings["monthly_savings"],
                         "annual_savings": savings["annual_savings"],
-                        "canceled_subscriptions": savings["canceled_subscriptions"]
+                        "subscription_names": savings["subscription_names"]
                     },
-                    time_to_achieve="Immediate",
-                    confidence=0.9
-                )
-                scenarios.append(scenario)
+                    confidence=0.90
+                ))
     except Exception:
         pass
     
-    # Scenario 4: Increase savings rate
-    try:
-        savings_accounts, savings_metrics = analyze_savings_patterns_for_customer(user_id, db_path, 180)
-        
-        if savings_accounts:
-            current_monthly_inflow = savings_metrics.average_monthly_inflow
-            target_increase = 200.0  # $200 more per month
-            
-            # Calculate impact of increasing savings by $200/month
-            new_monthly_inflow = current_monthly_inflow + target_increase
-            current_savings = savings_metrics.total_savings_balance
-            
-            # Project 6 months ahead
-            projected_6mo = current_savings + (new_monthly_inflow * 6)
-            projected_12mo = current_savings + (new_monthly_inflow * 12)
-            
-            scenario = CounterfactualScenario(
-                scenario_id=f"CF-{user_id}-SAVE-001",
-                title="Increase Savings by $200/Month",
-                description=f"If you increased your monthly savings by $200, you could significantly grow your savings.",
-                current_state={
-                    "current_monthly_savings": current_monthly_inflow,
-                    "current_balance": current_savings
-                },
-                hypothetical_state={
-                    "new_monthly_savings": new_monthly_inflow,
-                    "increase_amount": target_increase
-                },
-                projected_outcome={
-                    "projected_6mo_balance": projected_6mo,
-                    "projected_12mo_balance": projected_12mo,
-                    "additional_6mo_savings": target_increase * 6,
-                    "additional_12mo_savings": target_increase * 12
-                },
-                time_to_achieve="6-12 months",
-                confidence=0.8
-            )
-            scenarios.append(scenario)
-    except Exception:
-        pass
-    
-    return CounterfactualSet(
-        user_id=user_id,
-        scenarios=scenarios,
-        generated_at=datetime.now()
-    )
+    return scenarios
 
 
 def format_counterfactual_for_display(scenario: CounterfactualScenario) -> str:
@@ -356,46 +327,23 @@ def format_counterfactual_for_display(scenario: CounterfactualScenario) -> str:
     Returns:
         Formatted string for display
     """
-    text = f"**{scenario.title}**\n\n"
-    text += f"{scenario.description}\n\n"
+    output = f"**{scenario.title}**\n\n"
+    output += f"{scenario.description}\n\n"
     
-    text += "**Current State:**\n"
-    for key, value in scenario.current_state.items():
-        if isinstance(value, float):
-            if key == "utilization" or "percentage" in key.lower():
-                text += f"- {key.replace('_', ' ').title()}: {value:.1f}%\n"
-            elif "interest" in key.lower() or "savings" in key.lower() or "balance" in key.lower():
-                text += f"- {key.replace('_', ' ').title()}: ${value:,.2f}\n"
-            else:
-                text += f"- {key.replace('_', ' ').title()}: {value:.2f}\n"
-        else:
-            text += f"- {key.replace('_', ' ').title()}: {value}\n"
-    
-    text += "\n**Projected Outcome:**\n"
-    for key, value in scenario.projected_outcome.items():
-        if isinstance(value, float):
-            if "interest" in key.lower() or "savings" in key.lower() or "balance" in key.lower():
-                text += f"- {key.replace('_', ' ').title()}: ${value:,.2f}\n"
-            else:
-                text += f"- {key.replace('_', ' ').title()}: {value:.2f}\n"
-        elif isinstance(value, list):
-            text += f"- {key.replace('_', ' ').title()}:\n"
-            for item in value:
-                if isinstance(item, dict):
-                    for k, v in item.items():
-                        if isinstance(v, float):
-                            text += f"  - {k.replace('_', ' ').title()}: ${v:,.2f}\n"
-                        else:
-                            text += f"  - {k.replace('_', ' ').title()}: {v}\n"
+    if scenario.impact:
+        output += "**Impact:**\n"
+        for key, value in scenario.impact.items():
+            if isinstance(value, float):
+                if key.endswith("_savings") or key.endswith("_savings_needed"):
+                    output += f"- {key.replace('_', ' ').title()}: ${value:,.2f}\n"
                 else:
-                    text += f"  - {item}\n"
-        else:
-            text += f"- {key.replace('_', ' ').title()}: {value}\n"
+                    output += f"- {key.replace('_', ' ').title()}: {value:.2f}\n"
+            elif isinstance(value, list):
+                output += f"- {key.replace('_', ' ').title()}: {', '.join(str(v) for v in value)}\n"
+            else:
+                output += f"- {key.replace('_', ' ').title()}: {value}\n"
     
     if scenario.time_to_achieve:
-        text += f"\n**Time to Achieve:** {scenario.time_to_achieve}\n"
+        output += f"\n**Time to achieve:** {scenario.time_to_achieve}\n"
     
-    text += f"\n**Confidence:** {scenario.confidence:.0%}\n"
-    
-    return text
-
+    return output
