@@ -1,8 +1,11 @@
 """
-User interface module for SpendSenseAI.
+UI Module for SpendSenseAI.
 
-This module provides the operator dashboard and user-facing interfaces.
+Provides:
+- REST API Implementation
+- Operator Dashboard UI
 """
 
-__version__ = "0.1.0"
+from .api import app
 
+__all__ = ['app']
