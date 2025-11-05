@@ -39,12 +39,37 @@ from .recommendation_builder import (
 
 from .counterfactuals import (
     CounterfactualScenario,
-    CounterfactualSet,
-    generate_counterfactuals_for_user,
-    format_counterfactual_for_display,
+    generate_counterfactual_scenarios,
     calculate_interest_savings,
     calculate_emergency_fund_timeline,
-    calculate_subscription_savings
+    calculate_subscription_savings,
+    format_counterfactual_for_display
+)
+
+from .calculators import (
+    CreditPayoffResult,
+    EmergencyFundResult,
+    SubscriptionAnalyzerResult,
+    BudgetPlannerResult,
+    calculate_credit_payoff,
+    calculate_emergency_fund,
+    analyze_subscription_costs,
+    plan_variable_income_budget,
+    get_calculator_results_for_user
+)
+
+from .notifications import (
+    NotificationChannel,
+    NotificationTrigger,
+    NotificationTemplate,
+    Notification,
+    NotificationPreferences,
+    personalize_template,
+    should_send_notification,
+    generate_notification_for_persona,
+    create_notification_preferences,
+    generate_notification_templates_for_personas,
+    format_notification_for_display
 )
 
 __all__ = [
@@ -77,10 +102,33 @@ __all__ = [
     
     # Counterfactuals
     'CounterfactualScenario',
-    'CounterfactualSet',
-    'generate_counterfactuals_for_user',
-    'format_counterfactual_for_display',
+    'generate_counterfactual_scenarios',
     'calculate_interest_savings',
     'calculate_emergency_fund_timeline',
-    'calculate_subscription_savings'
+    'calculate_subscription_savings',
+    'format_counterfactual_for_display',
+    
+    # Calculators
+    'CreditPayoffResult',
+    'EmergencyFundResult',
+    'SubscriptionAnalyzerResult',
+    'BudgetPlannerResult',
+    'calculate_credit_payoff',
+    'calculate_emergency_fund',
+    'analyze_subscription_costs',
+    'plan_variable_income_budget',
+    'get_calculator_results_for_user',
+    
+    # Notifications
+    'NotificationChannel',
+    'NotificationTrigger',
+    'NotificationTemplate',
+    'Notification',
+    'NotificationPreferences',
+    'personalize_template',
+    'should_send_notification',
+    'generate_notification_for_persona',
+    'create_notification_preferences',
+    'generate_notification_templates_for_personas',
+    'format_notification_for_display'
 ]

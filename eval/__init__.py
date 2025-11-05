@@ -29,48 +29,65 @@ from .integration_tests import (
     generate_test_report
 )
 
-from .adversarial_testing import (
-    AdversarialScenario,
-    AdversarialTestReport,
-    test_extreme_utilization,
+from .adversarial_tests import (
+    AdversarialTestResult,
+    test_extreme_behaviors,
     test_sparse_data,
     test_conflicting_signals,
-    test_nonexistent_user,
-    test_data_quality_issues,
+    test_missing_data,
+    test_outliers,
     run_adversarial_tests,
-    export_adversarial_report,
-    generate_robustness_report
+    generate_adversarial_test_report
 )
 
 from .effectiveness_tracking import (
-    EngagementType,
-    OutcomeType,
-    EngagementEvent,
-    OutcomeMeasurement,
+    EngagementMetrics,
+    OutcomeMetrics,
     ContentPerformance,
     OfferPerformance,
     EffectivenessReport,
-    measure_utilization_outcome,
-    measure_savings_outcome,
-    calculate_content_performance,
-    calculate_offer_performance,
     track_engagement,
-    generate_effectiveness_report
+    track_outcome,
+    calculate_content_performance,
+    calculate_offer_roi,
+    generate_effectiveness_report,
+    generate_effectiveness_report_file
 )
 
 from .cohort_analysis import (
-    CohortDimension,
     CohortDefinition,
     CohortMetrics,
-    CohortAnalysis,
-    create_age_cohorts,
     create_income_cohorts,
-    create_persona_cohorts,
-    calculate_cohort_metrics,
-    analyze_fairness_across_cohorts,
-    run_cohort_analysis,
-    export_cohort_report,
+    analyze_cohort_persona_distribution,
+    calculate_cohort_average_metrics,
+    analyze_cohort,
+    analyze_all_cohorts,
     generate_cohort_report
+)
+
+from .bias_detection import (
+    BiasMetric,
+    BiasAnalysis,
+    calculate_demographic_parity,
+    calculate_disparate_impact,
+    calculate_confidence_calibration,
+    generate_bias_mitigation_recommendations,
+    run_bias_analysis,
+    generate_fairness_report
+)
+
+from .monitoring import (
+    HealthCheck,
+    PerformanceMetrics,
+    DataQualityAlert,
+    AnomalyAlert,
+    SystemHealth,
+    check_database_health,
+    check_data_quality,
+    detect_persona_distribution_anomaly,
+    monitor_performance,
+    check_system_health,
+    generate_health_report
 )
 
 __all__ = [
@@ -96,14 +113,58 @@ __all__ = [
     'generate_test_report',
     
     # Adversarial Testing
-    'AdversarialScenario',
-    'AdversarialTestReport',
-    'test_extreme_utilization',
+    'AdversarialTestResult',
+    'test_extreme_behaviors',
     'test_sparse_data',
     'test_conflicting_signals',
-    'test_nonexistent_user',
-    'test_data_quality_issues',
+    'test_missing_data',
+    'test_outliers',
     'run_adversarial_tests',
-    'export_adversarial_report',
-    'generate_robustness_report'
+    'generate_adversarial_test_report',
+    
+    # Effectiveness Tracking
+    'EngagementMetrics',
+    'OutcomeMetrics',
+    'ContentPerformance',
+    'OfferPerformance',
+    'EffectivenessReport',
+    'track_engagement',
+    'track_outcome',
+    'calculate_content_performance',
+    'calculate_offer_roi',
+    'generate_effectiveness_report',
+    'generate_effectiveness_report_file',
+    
+    # Cohort Analysis
+    'CohortDefinition',
+    'CohortMetrics',
+    'create_income_cohorts',
+    'analyze_cohort_persona_distribution',
+    'calculate_cohort_average_metrics',
+    'analyze_cohort',
+    'analyze_all_cohorts',
+    'generate_cohort_report',
+    
+    # Bias Detection
+    'BiasMetric',
+    'BiasAnalysis',
+    'calculate_demographic_parity',
+    'calculate_disparate_impact',
+    'calculate_confidence_calibration',
+    'generate_bias_mitigation_recommendations',
+    'run_bias_analysis',
+    'generate_fairness_report',
+    
+    # Monitoring
+    'HealthCheck',
+    'PerformanceMetrics',
+    'DataQualityAlert',
+    'AnomalyAlert',
+    'SystemHealth',
+    'check_database_health',
+    'check_data_quality',
+    'detect_persona_distribution_anomaly',
+    'monitor_performance',
+    'check_system_health',
+    'generate_health_report'
 ]

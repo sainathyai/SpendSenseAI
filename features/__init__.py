@@ -52,17 +52,16 @@ from .income_stability import (
 )
 
 from .trend_analysis import (
-    TrendDirection,
-    TrendDataPoint,
-    BehaviorTrend,
-    PersonaEvolution,
+    TrendPoint,
     TrendAnalysis,
-    calculate_trend_direction,
-    analyze_credit_utilization_trend,
+    BehaviorTrends,
+    calculate_month_over_month_trend,
+    analyze_utilization_trend,
     analyze_savings_trend,
-    analyze_subscription_trend,
     track_persona_evolution,
-    analyze_trends_for_user
+    analyze_behavior_trends,
+    detect_early_warning_signals,
+    generate_trend_report
 )
 
 __all__ = [
@@ -103,16 +102,15 @@ __all__ = [
     'analyze_income_stability_for_customer',
     
     # Trend Analysis
-    'TrendDirection',
-    'TrendDataPoint',
-    'BehaviorTrend',
-    'PersonaEvolution',
+    'TrendPoint',
     'TrendAnalysis',
-    'calculate_trend_direction',
-    'analyze_credit_utilization_trend',
+    'BehaviorTrends',
+    'calculate_month_over_month_trend',
+    'analyze_utilization_trend',
     'analyze_savings_trend',
-    'analyze_subscription_trend',
     'track_persona_evolution',
-    'analyze_trends_for_user'
+    'analyze_behavior_trends',
+    'detect_early_warning_signals',
+    'generate_trend_report'
 ]
 
