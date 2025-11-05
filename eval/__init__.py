@@ -42,6 +42,22 @@ from .adversarial_testing import (
     generate_robustness_report
 )
 
+from .effectiveness_tracking import (
+    EngagementType,
+    OutcomeType,
+    EngagementEvent,
+    OutcomeMeasurement,
+    ContentPerformance,
+    OfferPerformance,
+    EffectivenessReport,
+    measure_utilization_outcome,
+    measure_savings_outcome,
+    calculate_content_performance,
+    calculate_offer_performance,
+    track_engagement,
+    generate_effectiveness_report
+)
+
 __all__ = [
     # Metrics
     'CoverageMetrics',
