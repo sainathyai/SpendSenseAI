@@ -444,6 +444,81 @@ async def get_user_profile(user_id: str):
         raise HTTPException(status_code=500, detail=f"Error retrieving profile: {str(e)}")
 
 
+@app.get("/balances/{user_id}", tags=["profile"])
+async def get_user_balances(user_id: str):
+    """Get account balances and financial summary for a user."""
+    try:
+        from ingest.queries import get_credit_card_liabilities_by_customer
+        
+        balance_analysis = analyze_customer_balances(user_id, DB_PATH)
+        
+        # Get credit card liabilities for APR data
+        credit_liabilities = get_credit_card_liabilities_by_customer(user_id, DB_PATH)
+        liability_map = {liab.account_id: liab for liab in credit_liabilities}
+        
+        # Format response - balance_analysis is a dict, not an object
+        accounts = []
+        account_balances = balance_analysis.get('account_balances', [])
+        
+        def synthesize_apr(balance: float, utilization: float) -> float:
+            """Synthesize APR based on balance and utilization."""
+            base_apr = 18.0  # Base APR for good credit
+            utilization_multiplier = min(utilization / 100, 1.0)
+            balance_multiplier = 1.2 if balance > 10000 else 1.0
+            
+            apr = base_apr + (utilization_multiplier * 7)
+            apr *= balance_multiplier
+            
+            return round(apr, 1)
+        
+        for account in account_balances:
+            # account is an AccountBalance dataclass
+            account_data = {
+                "account_id": account.account_id,
+                "type": account.account_type,
+                "subtype": account.account_subtype,
+                "balances": {
+                    "current": account.current_balance,
+                    "available": account.available_balance,
+                    "limit": account.credit_limit
+                }
+            }
+            
+            # Add APR for credit cards
+            if account.account_type == 'credit' and account.current_balance > 0:
+                # Try to get APR from liability data first
+                liability = liability_map.get(account.account_id)
+                if liability and liability.aprs:
+                    # Use actual APR from liability data
+                    account_data["apr"] = liability.aprs[0].percentage
+                else:
+                    # Synthesize APR based on utilization
+                    limit = account.credit_limit or 0
+                    utilization = (account.current_balance / limit * 100) if limit > 0 else 0
+                    account_data["apr"] = synthesize_apr(account.current_balance, utilization)
+                
+                # Add utilization rate
+                if account.credit_limit and account.credit_limit > 0:
+                    account_data["utilization_rate"] = round((account.current_balance / account.credit_limit) * 100, 1)
+            
+            accounts.append(account_data)
+        
+        summary = balance_analysis.get('summary', {})
+        total_assets = summary.get('total_assets', 0.0)
+        total_debts = summary.get('total_debts', 0.0)
+        
+        return {
+            "user_id": user_id,
+            "total_assets": total_assets,
+            "total_debts": total_debts,
+            "net_worth": total_assets - total_debts,
+            "accounts": accounts,
+            "generated_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving balances: {str(e)}")
+
+
 # ============================================================================
 # Recommendation Endpoints
 # ============================================================================
@@ -454,11 +529,11 @@ async def get_recommendations(
     estimated_income: float = 0.0,
     estimated_credit_score: int = 700,
     check_consent: bool = True,
-    grace_period_days: int = 0
+    grace_period_days: int = 30  # Default grace period of 30 days
 ):
     """Get recommendations with rationales for a user."""
     try:
-        # Assign persona
+        # Assign persona (now always returns a persona, defaulting to SAVINGS_BUILDER if none match)
         persona_assignment = assign_personas_with_prioritization(user_id, DB_PATH)
         
         # Build recommendations
@@ -473,9 +548,17 @@ async def get_recommendations(
         )
         
         # Format for API
-        return format_recommendations_for_api(recommendations)
+        result = format_recommendations_for_api(recommendations)
+        
+        # Add helpful message if no recommendations
+        if not result.get('education_items') and not result.get('partner_offers'):
+            result['message'] = "No recommendations available. This may be due to insufficient data or no matching content/offers for your persona."
+        
+        return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
+        import traceback
+        error_detail = f"Error generating recommendations: {str(e)}\n{traceback.format_exc()}"
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 # ============================================================================
@@ -483,8 +566,9 @@ async def get_recommendations(
 # ============================================================================
 
 @app.post("/calculators/credit-payoff", tags=["calculators"])
-async def calculate_credit_payoff_endpoint(
+def calculate_credit_payoff_endpoint(
     balance: float,
+    credit_limit: float,
     apr: float,
     monthly_payment: float
 ):
@@ -492,14 +576,31 @@ async def calculate_credit_payoff_endpoint(
     from recommend.calculators import calculate_credit_payoff
     
     try:
-        result = calculate_credit_payoff(balance, apr, monthly_payment)
-        return result
+        result = calculate_credit_payoff(
+            current_balance=balance,
+            credit_limit=credit_limit,
+            target_utilization=0.30,  # Target 30% utilization
+            monthly_payment=monthly_payment,
+            apr=apr
+        )
+        
+        # Convert to dict for API response
+        return {
+            "months_to_goal": result.months_to_goal,
+            "total_interest_paid": result.total_interest_paid,
+            "total_payments": result.total_payments,
+            "current_balance": result.current_balance,
+            "current_utilization": result.current_utilization,
+            "target_balance": result.target_balance,
+            "balance_reduction_needed": result.balance_reduction_needed,
+            "monthly_payment": result.monthly_payment
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/calculators/emergency-fund", tags=["calculators"])
-async def calculate_emergency_fund_endpoint(
+def calculate_emergency_fund_endpoint(
     monthly_expenses: float,
     current_savings: float,
     monthly_savings: float,
@@ -510,12 +611,23 @@ async def calculate_emergency_fund_endpoint(
     
     try:
         result = calculate_emergency_fund(
-            monthly_expenses=monthly_expenses,
             current_savings=current_savings,
-            monthly_savings=monthly_savings,
-            target_months=target_months
+            monthly_expenses=monthly_expenses,
+            target_months=target_months,
+            monthly_savings=monthly_savings
         )
-        return result
+        
+        # Convert to dict for API response
+        return {
+            "target_emergency_fund": result.target_emergency_fund,
+            "current_savings": result.current_savings,
+            "monthly_expenses": result.monthly_expenses,
+            "months_coverage": result.months_coverage,
+            "remaining_needed": result.remaining_needed,
+            "monthly_savings": result.monthly_savings,
+            "months_to_goal": result.months_to_goal,
+            "achievable": result.achievable
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -526,10 +638,35 @@ async def analyze_subscriptions_endpoint(
 ):
     """Analyze subscription costs for a user."""
     from recommend.calculators import analyze_subscription_costs
+    from features.subscription_detection import detect_subscriptions_for_customer
     
     try:
-        result = analyze_subscription_costs(user_id, DB_PATH)
-        return result
+        # Detect subscriptions for the customer
+        subscriptions, sub_metrics = detect_subscriptions_for_customer(user_id, DB_PATH, window_days=90)
+        
+        # If no subscriptions found, return empty result
+        if not subscriptions:
+            return {
+                "total_subscriptions": 0,
+                "monthly_recurring_spend": 0.0,
+                "annual_recurring_spend": 0.0,
+                "subscriptions_to_cancel": [],
+                "potential_monthly_savings": 0.0,
+                "potential_annual_savings": 0.0
+            }
+        
+        # Analyze subscription costs
+        result = analyze_subscription_costs(subscriptions)
+        
+        # Convert to dict for API response
+        return {
+            "total_subscriptions": result.total_subscriptions,
+            "monthly_recurring_spend": result.monthly_recurring_spend,
+            "annual_recurring_spend": result.annual_recurring_spend,
+            "subscriptions_to_cancel": result.subscriptions_to_cancel,
+            "potential_monthly_savings": result.potential_monthly_savings,
+            "potential_annual_savings": result.potential_annual_savings
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -540,10 +677,46 @@ async def plan_variable_budget_endpoint(
 ):
     """Plan budget for variable income."""
     from recommend.calculators import plan_variable_income_budget
+    from features.income_stability import analyze_income_stability_for_customer
+    from ingest.balance_analysis import analyze_customer_balances
     
     try:
-        result = plan_variable_income_budget(user_id, DB_PATH)
-        return result
+        # Get income stability metrics
+        income_metrics = analyze_income_stability_for_customer(user_id, DB_PATH, 180)
+        
+        # Get balance data to estimate monthly income
+        balance_data = analyze_customer_balances(user_id, DB_PATH)
+        
+        # Estimate monthly income from balance data or use default
+        estimated_monthly_income = 3000.0  # Default estimate
+        if balance_data and 'total_assets' in balance_data:
+            # Use a conservative estimate based on assets
+            estimated_monthly_income = max(3000.0, balance_data.get('total_assets', 0) / 12)
+        
+        # Get income variability (default to 0.3 if not available)
+        income_variability = getattr(income_metrics, 'income_variability', 0.3)
+        
+        # Estimate essential expenses (50% of income as a default)
+        essential_expenses = estimated_monthly_income * 0.50
+        
+        # Plan the budget
+        result = plan_variable_income_budget(
+            monthly_income=estimated_monthly_income,
+            income_variability=income_variability,
+            essential_expenses=essential_expenses,
+            savings_target_percentage=0.20
+        )
+        
+        # Convert to dict for API response
+        return {
+            "monthly_income": result.monthly_income,
+            "income_variability": result.income_variability,
+            "essential_expenses": result.essential_expenses,
+            "discretionary_expenses": result.discretionary_expenses,
+            "savings_target": result.savings_target,
+            "recommended_budget": result.recommended_budget,
+            "percentage_budget": result.percentage_budget
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
