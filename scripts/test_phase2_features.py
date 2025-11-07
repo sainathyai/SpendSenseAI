@@ -24,7 +24,8 @@ from features.trend_analysis import (
 from eval.effectiveness_tracking import (
     track_engagement,
     track_outcome,
-    generate_effectiveness_report
+    generate_effectiveness_report,
+    create_effectiveness_tables
 )
 from eval.monitoring import (
     check_system_health,
@@ -35,6 +36,10 @@ from eval.monitoring import (
 from ingest.queries import get_all_customers
 
 DB_PATH = "data/spendsense.db"
+
+
+# Ensure effectiveness tables exist before running tests
+create_effectiveness_tables(DB_PATH)
 
 
 def test_behavioral_trends():
@@ -139,12 +144,18 @@ def test_effectiveness_tracking():
     print("=" * 80)
     
     try:
+        customers = get_all_customers(DB_PATH)
+        test_customer = customers[0].customer_id if hasattr(customers[0], 'customer_id') else customers[0]
+
         # Test engagement tracking
         print("\nTesting engagement tracking...")
+        test_recommendation_id = "REC-TEST-001"
         engagement = track_engagement(
-            "REC-TEST-001",
+            test_recommendation_id,
             "view",
-            {"time_spent": 120.5}
+            {"time_spent": 120.5, "content_id": "CONTENT-TEST-001"},
+            user_id=test_customer,
+            db_path=DB_PATH
         )
         
         print(f"  Engagement tracked:")
@@ -154,14 +165,12 @@ def test_effectiveness_tracking():
         
         # Test outcome tracking
         print("\nTesting outcome tracking...")
-        customers = get_all_customers(DB_PATH)
-        test_customer = customers[0].customer_id if hasattr(customers[0], 'customer_id') else customers[0]
-        
         outcome = track_outcome(
             test_customer,
-            "REC-TEST-002",
+            test_recommendation_id,
             DB_PATH,
-            "utilization_improved"
+            "utilization_improved",
+            metadata={"content_id": "CONTENT-TEST-001"}
         )
         
         if outcome:

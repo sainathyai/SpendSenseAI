@@ -51,7 +51,8 @@ from .effectiveness_tracking import (
     calculate_content_performance,
     calculate_offer_roi,
     generate_effectiveness_report,
-    generate_effectiveness_report_file
+    generate_effectiveness_report_file,
+    create_effectiveness_tables
 )
 
 from .cohort_analysis import (
@@ -88,6 +89,26 @@ from .monitoring import (
     monitor_performance,
     check_system_health,
     generate_health_report
+)
+
+from .alert_notifier import (
+    NotificationChannel,
+    AlertConfig,
+    AlertNotification,
+    send_alert_notification,
+    load_alert_configs,
+    send_console_alert,
+    send_slack_alert,
+    send_email_alert,
+    send_pagerduty_alert
+)
+
+from .cost_tracking import (
+    LLMUsage,
+    calculate_cost,
+    track_llm_usage,
+    get_cost_summary,
+    create_cost_tracking_tables
 )
 
 __all__ = [

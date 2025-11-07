@@ -143,7 +143,7 @@ def main():
     st.sidebar.title("Navigation")
     page = st.sidebar.radio(
         "Select Page",
-        ["All Recommendations", "Pending Reviews", "User Search", "Query Tool", "Decision Traces", "Audit Log"]
+        ["All Recommendations", "Pending Reviews", "User Search", "Query Tool", "Decision Traces", "Audit Log", "System Health"]
     )
     
     # API health check
@@ -169,6 +169,9 @@ def main():
         show_decision_traces()
     elif page == "Audit Log":
         show_audit_log()
+    elif page == "System Health":
+        from ui.health_dashboard import show_health_dashboard
+        show_health_dashboard()
 
 
 # ============================================================================

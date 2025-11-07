@@ -348,7 +348,8 @@ def monitor_performance(
 
 def check_system_health(
     user_ids: List[str],
-    db_path: str
+    db_path: str,
+    send_notifications: bool = True
 ) -> SystemHealth:
     """
     Check overall system health.
@@ -356,6 +357,7 @@ def check_system_health(
     Args:
         user_ids: List of user IDs
         db_path: Path to SQLite database
+        send_notifications: Whether to send alert notifications
         
     Returns:
         SystemHealth object
@@ -404,7 +406,7 @@ def check_system_health(
     else:
         overall_status = "unhealthy"
     
-    return SystemHealth(
+    system_health = SystemHealth(
         timestamp=datetime.now(),
         overall_status=overall_status,
         health_checks=health_checks,
@@ -413,6 +415,66 @@ def check_system_health(
         anomaly_alerts=anomaly_alerts,
         health_score=health_score
     )
+    
+    # Send notifications for critical issues
+    if send_notifications:
+        try:
+            from eval.alert_notifier import send_alert_notification, load_alert_configs
+            
+            configs = load_alert_configs()
+            
+            # Send alerts for data quality issues
+            for alert in data_quality_alerts:
+                if alert.severity in ["critical", "high"]:
+                    alert_dict = {
+                        "alert_id": alert.alert_id,
+                        "level": alert.severity,
+                        "title": f"Data Quality: {alert.alert_type}",
+                        "message": alert.message,
+                        "timestamp": alert.timestamp,
+                        "component": "data_quality",
+                        "metadata": {"affected_count": alert.affected_count}
+                    }
+                    send_alert_notification(alert_dict, configs)
+            
+            # Send alerts for anomalies
+            for alert in anomaly_alerts:
+                alert_dict = {
+                    "alert_id": alert.alert_id,
+                    "level": alert.severity,
+                    "title": f"Anomaly: {alert.anomaly_type}",
+                    "message": alert.message,
+                    "timestamp": alert.timestamp,
+                    "component": "anomaly_detection",
+                    "metadata": {
+                        "baseline_value": alert.baseline_value,
+                        "current_value": alert.current_value,
+                        "deviation_percentage": alert.deviation_percentage
+                    }
+                }
+                send_alert_notification(alert_dict, configs)
+            
+            # Send alert if system is unhealthy
+            if overall_status == "unhealthy":
+                alert_dict = {
+                    "alert_id": f"HEALTH-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    "level": "critical",
+                    "title": "System Unhealthy",
+                    "message": f"System health score is {health_score:.1f}/100. Status: {overall_status}",
+                    "timestamp": datetime.now(),
+                    "component": "system",
+                    "metadata": {
+                        "health_score": health_score,
+                        "status": overall_status
+                    }
+                }
+                send_alert_notification(alert_dict, configs)
+        except Exception as e:
+            # Don't fail health check if notifications fail
+            import logging
+            logging.warning(f"Failed to send alert notifications: {e}")
+    
+    return system_health
 
 
 def generate_health_report(

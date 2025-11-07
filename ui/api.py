@@ -44,6 +44,12 @@ from ingest.queries import (
     get_all_customers_with_summary,
     get_transactions_summary_by_category
 )
+from eval.effectiveness_tracking import (
+    track_engagement,
+    track_outcome,
+    generate_effectiveness_report,
+    create_effectiveness_tables
+)
 
 import os
 
@@ -156,6 +162,26 @@ class ReviewUpdate(BaseModel):
     reviewed_by: str
     review_notes: Optional[str] = None
     override_reason: Optional[str] = None
+
+
+class EngagementTrackRequest(BaseModel):
+    """Request body for tracking recommendation engagement."""
+    recommendation_id: str
+    action: str
+    user_id: Optional[str] = None
+    time_spent: float = 0.0
+    content_id: Optional[str] = None
+    offer_id: Optional[str] = None
+
+
+class OutcomeTrackRequest(BaseModel):
+    """Request body for tracking recommendation outcomes."""
+    user_id: str
+    recommendation_id: str
+    outcome_type: str
+    time_window_days: Optional[int] = 30
+    content_id: Optional[str] = None
+    offer_id: Optional[str] = None
 
 
 # ============================================================================
@@ -772,20 +798,26 @@ async def get_persona_evolution(user_id: str):
 # ============================================================================
 
 @app.post("/tracking/engagement", tags=["tracking"], description="Track engagement with a recommendation.")
-async def track_recommendation_engagement(
-    recommendation_id: str,
-    action: str,
-    time_spent: float = 0.0
-):
+async def track_recommendation_engagement(request: EngagementTrackRequest):
     """Track engagement with a recommendation."""
-    from eval.effectiveness_tracking import track_engagement
-    
     try:
-        engagement_data = {"time_spent": time_spent}
-        metrics = track_engagement(recommendation_id, action, engagement_data)
-        
+        metrics = track_engagement(
+            recommendation_id=request.recommendation_id,
+            action=request.action,
+            engagement_data={
+                "time_spent": request.time_spent,
+                "content_id": request.content_id,
+                "offer_id": request.offer_id
+            },
+            user_id=request.user_id,
+            db_path=DB_PATH
+        )
+
         return {
             "recommendation_id": metrics.recommendation_id,
+            "user_id": metrics.user_id,
+            "content_id": metrics.content_id,
+            "offer_id": metrics.offer_id,
             "views": metrics.views,
             "clicks": metrics.clicks,
             "completions": metrics.completions,
@@ -797,34 +829,41 @@ async def track_recommendation_engagement(
         raise HTTPException(status_code=500, detail=f"Error tracking engagement: {str(e)}")
 
 
-@app.get("/tracking/outcomes/{user_id}", tags=["tracking"], description="Track outcomes for a user.")
-async def track_user_outcomes(
-    user_id: str,
-    recommendation_id: str,
-    outcome_type: str
-):
+@app.post("/tracking/outcomes", tags=["tracking"], description="Track outcomes for a user.")
+async def track_user_outcomes(request: OutcomeTrackRequest):
     """Track outcome of a recommendation for a user."""
-    from eval.effectiveness_tracking import track_outcome
-    
     try:
-        outcome = track_outcome(user_id, recommendation_id, DB_PATH, outcome_type)
-        
+        outcome = track_outcome(
+            request.user_id,
+            request.recommendation_id,
+            DB_PATH,
+            request.outcome_type,
+            time_window_days=request.time_window_days or 30,
+            metadata={
+                "content_id": request.content_id,
+                "offer_id": request.offer_id
+            }
+        )
+
         if outcome:
             return {
+                "user_id": outcome.user_id,
                 "recommendation_id": outcome.recommendation_id,
                 "outcome_type": outcome.outcome_type,
                 "before_value": outcome.before_value,
                 "after_value": outcome.after_value,
                 "improvement_percentage": outcome.improvement_percentage,
                 "time_to_improvement_days": outcome.time_to_improvement_days,
-                "attribution_confidence": outcome.attribution_confidence
+                "attribution_confidence": outcome.attribution_confidence,
+                "content_id": outcome.content_id,
+                "offer_id": outcome.offer_id,
+                "observed_at": outcome.observed_at.isoformat()
             }
-        else:
-            return {
-                "message": "No outcome data available",
-                "user_id": user_id,
-                "recommendation_id": recommendation_id
-            }
+        return {
+            "message": "No outcome data available",
+            "user_id": request.user_id,
+            "recommendation_id": request.recommendation_id
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error tracking outcome: {str(e)}")
 
@@ -832,7 +871,6 @@ async def track_user_outcomes(
 @app.get("/tracking/effectiveness-report", tags=["tracking"], description="Generate effectiveness report.")
 async def get_effectiveness_report(limit: int = 100):
     """Generate effectiveness report for all users."""
-    from eval.effectiveness_tracking import generate_effectiveness_report
     from ingest.queries import get_all_customers
     
     try:
@@ -1010,6 +1048,202 @@ async def get_performance_metrics():
         raise HTTPException(status_code=500, detail=f"Error retrieving performance metrics: {str(e)}")
 
 
+@app.post("/health/test-alert", tags=["health"], description="Test alert notification system.")
+async def test_alert_notification(level: str = "info"):
+    """Test alert notification system with a sample alert."""
+    from eval.alert_notifier import send_alert_notification, load_alert_configs
+    from datetime import datetime
+    
+    try:
+        configs = load_alert_configs()
+        
+        test_alert = {
+            "alert_id": f"TEST-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "level": level,
+            "title": "Test Alert",
+            "message": "This is a test alert to verify the notification system is working correctly.",
+            "timestamp": datetime.now(),
+            "component": "testing",
+            "metadata": {
+                "test": True,
+                "level": level
+            }
+        }
+        
+        notifications = send_alert_notification(test_alert, configs)
+        
+        return {
+            "message": "Test alert sent",
+            "alert": test_alert,
+            "notifications": [
+                {
+                    "channel": n.channel.value,
+                    "success": n.success,
+                    "sent_at": n.sent_at.isoformat(),
+                    "error_message": n.error_message
+                }
+                for n in notifications
+            ],
+            "total_channels": len(notifications),
+            "successful_channels": sum(1 for n in notifications if n.success)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error testing alert notification: {str(e)}")
+
+
+@app.get("/health/dashboard", tags=["health"], description="Get comprehensive dashboard metrics.")
+async def get_dashboard_metrics():
+    """Get comprehensive dashboard metrics for health dashboard."""
+    from eval.monitoring import check_system_health, check_data_quality, monitor_performance
+    from eval.cost_tracking import get_cost_summary, create_cost_tracking_tables
+    from ingest.queries import get_all_customers
+    from ingest.database import get_connection
+    from datetime import datetime, timedelta, date
+    
+    try:
+        # Initialize cost tracking tables
+        create_cost_tracking_tables(DB_PATH)
+        
+        # Get system health
+        customers = get_all_customers(DB_PATH)
+        user_ids = [c.customer_id if hasattr(c, 'customer_id') else c for c in customers[:100]]
+        
+        system_health = check_system_health(user_ids, DB_PATH, send_notifications=False)
+        
+        # Get performance metrics
+        perf_metrics = monitor_performance(user_ids, DB_PATH)
+        
+        # Get data quality alerts
+        data_quality_alerts = check_data_quality(DB_PATH)
+        
+        # Get cost summary
+        cost_summary = get_cost_summary(DB_PATH)
+        
+        # Get user activity
+        today = date.today()
+        week_ago = today - timedelta(days=7)
+        
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            
+            # Active users today
+            cursor.execute("""
+                SELECT COUNT(DISTINCT customer_id) 
+                FROM accounts 
+                WHERE DATE(updated_at) = ?
+            """, (today.isoformat(),))
+            active_today = cursor.fetchone()[0] or 0
+            
+            # Active users this week
+            cursor.execute("""
+                SELECT COUNT(DISTINCT customer_id) 
+                FROM accounts 
+                WHERE DATE(updated_at) >= ?
+            """, (week_ago.isoformat(),))
+            active_week = cursor.fetchone()[0] or 0
+            
+            # Recommendations served today (from effectiveness tracking)
+            try:
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT recommendation_id) 
+                    FROM recommendation_engagement 
+                    WHERE DATE(created_at) = ?
+                """, (today.isoformat(),))
+                recommendations_today = cursor.fetchone()[0] or 0
+            except Exception:
+                recommendations_today = 0
+            
+            # Consent granted today
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM consent 
+                    WHERE DATE(granted_at) = ? AND status = 'active'
+                """, (today.isoformat(),))
+                consent_today = cursor.fetchone()[0] or 0
+            except Exception:
+                consent_today = 0
+            
+            # Database size
+            cursor.execute("SELECT COUNT(*) FROM accounts")
+            total_accounts = cursor.fetchone()[0] or 0
+            
+            cursor.execute("SELECT COUNT(*) FROM transactions")
+            total_transactions = cursor.fetchone()[0] or 0
+            
+            # Data freshness (most recent transaction)
+            try:
+                cursor.execute("""
+                    SELECT MAX(date) 
+                    FROM transactions
+                """)
+                latest_transaction = cursor.fetchone()[0]
+                if latest_transaction:
+                    latest_date = datetime.fromisoformat(latest_transaction) if isinstance(latest_transaction, str) else latest_transaction
+                    data_freshness_hours = (datetime.now() - latest_date).total_seconds() / 3600
+                else:
+                    data_freshness_hours = 0
+            except Exception:
+                data_freshness_hours = 0
+        
+        # Calculate uptime (simplified - would need actual start time)
+        uptime_seconds = 86400  # Placeholder
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "overall_status": system_health.overall_status,
+            "health_score": system_health.health_score,
+            "uptime_seconds": uptime_seconds,
+            "active_alerts_count": len(data_quality_alerts) + len(system_health.anomaly_alerts),
+            "performance_metrics": {
+                "latency_p50": perf_metrics.latency_p50,
+                "latency_p95": perf_metrics.latency_p95,
+                "latency_p99": perf_metrics.latency_p99,
+                "throughput": perf_metrics.throughput,
+                "error_rate": perf_metrics.error_rate,
+                "active_users": perf_metrics.active_users,
+                "latency_history": []  # Would need historical data
+            },
+            "user_activity": {
+                "active_today": active_today,
+                "active_week": active_week,
+                "recommendations_served_today": recommendations_today,
+                "consent_granted_today": consent_today
+            },
+            "data_quality": {
+                "total_accounts": total_accounts,
+                "total_transactions": total_transactions,
+                "data_freshness_hours": data_freshness_hours,
+                "alerts": [
+                    {
+                        "alert_id": alert.alert_id,
+                        "alert_type": alert.alert_type,
+                        "severity": alert.severity,
+                        "message": alert.message,
+                        "affected_count": alert.affected_count,
+                        "timestamp": alert.timestamp.isoformat()
+                    }
+                    for alert in data_quality_alerts
+                ]
+            },
+            "costs": {
+                "llm_cost_today": cost_summary.get("today_cost", 0.0),
+                "llm_cost_month": cost_summary.get("month_cost", 0.0),
+                "llm_requests_today": cost_summary.get("today_requests", 0),
+                "avg_cost_per_request": cost_summary.get("avg_cost_per_request", 0.0),
+                "cost_history": [
+                    {
+                        "date": daily["date"],
+                        "daily_cost": daily["total_cost"]
+                    }
+                    for daily in cost_summary.get("daily_costs", [])[:30]  # Last 30 days
+                ]
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating dashboard metrics: {str(e)}")
+
+
 # ============================================================================
 # Startup
 # ============================================================================
@@ -1019,6 +1253,11 @@ async def startup_event():
     """Initialize database tables on startup."""
     # Ensure decision trace tables exist
     create_decision_trace_tables(DB_PATH)
+    create_effectiveness_tables(DB_PATH)
+    
+    # Initialize cost tracking tables
+    from eval.cost_tracking import create_cost_tracking_tables
+    create_cost_tracking_tables(DB_PATH)
 
 
 if __name__ == "__main__":

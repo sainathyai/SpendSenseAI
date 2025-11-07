@@ -301,6 +301,25 @@ Remember: This is educational content, not financial advice. Be helpful, clear, 
                 )
                 
                 rationale = response.choices[0].message.content.strip()
+                
+                # Track usage and cost
+                try:
+                    from eval.cost_tracking import track_llm_usage
+                    import os
+                    
+                    db_path = os.getenv("SPENDSENSE_DB_PATH", "data/spendsense.db")
+                    usage = response.usage
+                    
+                    track_llm_usage(
+                        db_path=db_path,
+                        model=self.config.model,
+                        input_tokens=usage.prompt_tokens if usage else 0,
+                        output_tokens=usage.completion_tokens if usage else 0,
+                        user_id=data_citations.get("user_id") if isinstance(data_citations, dict) else None,
+                        recommendation_id=data_citations.get("recommendation_id") if isinstance(data_citations, dict) else None
+                    )
+                except Exception as e:
+                    logging.warning(f"Failed to track LLM usage: {e}")
             
             # Validate tone (basic check)
             if not self._validate_tone(rationale):
