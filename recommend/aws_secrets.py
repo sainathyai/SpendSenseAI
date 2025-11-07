@@ -7,6 +7,7 @@ Provides secure API key retrieval from AWS Secrets Manager:
 - Fallback to environment variable for local development
 - IAM-based access control
 - Audit trail in CloudTrail
+- Supports multiple secrets with fallback (sainathyai-specific and generic)
 """
 
 import os
@@ -30,7 +31,7 @@ class SecretsManager:
     
     def __init__(
         self,
-        secret_name: Optional[str] = None,
+        secret_names: Optional[list] = None,
         region_name: Optional[str] = None,
         cache_ttl: int = 3600  # 1 hour cache
     ):
@@ -38,24 +39,59 @@ class SecretsManager:
         Initialize Secrets Manager client.
         
         Args:
-            secret_name: Name of the secret in AWS Secrets Manager (default: from env)
+            secret_names: List of secret names to try (default: from env, supports multiple)
             region_name: AWS region (default: from env or us-east-1)
             cache_ttl: Cache TTL in seconds (default: 3600)
         """
-        self.secret_name = secret_name or os.getenv("AWS_SECRET_NAME", "spendsenseai/openai-api-key")
+        # Support multiple secret names (primary and fallback)
+        if secret_names:
+            self.secret_names = secret_names
+        else:
+            # Get from environment - support comma-separated list or single value
+            env_secrets = os.getenv("AWS_SECRET_NAMES", "")
+            if env_secrets:
+                self.secret_names = [s.strip() for s in env_secrets.split(",")]
+            else:
+                # Fallback to single secret name for backward compatibility
+                single_secret = os.getenv("AWS_SECRET_NAME", "openai/sainathyai")
+                self.secret_names = [single_secret]
+        
         self.region_name = region_name or os.getenv("AWS_REGION", "us-east-1")
         self.cache_ttl = cache_ttl
         
         self._client = None
         self._cached_key = None
         self._cache_timestamp = 0
+        self._last_successful_secret = None  # Track which secret worked
         
         if AWS_AVAILABLE:
             try:
+                # boto3 automatically uses IAM role if running on AWS infrastructure
+                # Falls back to credentials file or environment variables for local dev
                 self._client = boto3.client(
                     'secretsmanager',
                     region_name=self.region_name
+                    # No explicit credentials - uses default credential chain:
+                    # 1. IAM role (if on EC2/ECS/Lambda)
+                    # 2. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+                    # 3. AWS credentials file (~/.aws/credentials)
+                    # 4. AWS config file (~/.aws/config)
                 )
+                logging.info(f"Initialized AWS Secrets Manager client for region: {self.region_name}")
+                
+                # Log which authentication method is being used
+                # boto3 is already imported at module level if AWS_AVAILABLE is True
+                try:
+                    if AWS_AVAILABLE:
+                        sts = boto3.client('sts')
+                        identity = sts.get_caller_identity()
+                        if 'role' in identity.get('Arn', '').lower():
+                            logging.info(f"Using IAM role: {identity['Arn']}")
+                        else:
+                            logging.info(f"Using IAM user: {identity['Arn']}")
+                except Exception:
+                    pass  # Don't fail if we can't check identity
+                    
             except Exception as e:
                 logging.warning(f"Failed to initialize AWS Secrets Manager: {str(e)}")
                 self._client = None
@@ -63,46 +99,71 @@ class SecretsManager:
     def get_openai_api_key(self) -> Optional[str]:
         """
         Get OpenAI API key from AWS Secrets Manager with caching.
+        Tries multiple secrets in order (primary, fallback).
         
         Returns:
             API key string or None if unavailable
         """
         # Check cache first
         if self._cached_key and (time.time() - self._cache_timestamp) < self.cache_ttl:
+            logging.debug(f"Using cached API key from secret: {self._last_successful_secret}")
             return self._cached_key
         
-        # Try AWS Secrets Manager
+        # Try AWS Secrets Manager - iterate through all secret names
         if self._client:
-            try:
-                response = self._client.get_secret_value(SecretId=self.secret_name)
-                
-                # Parse secret (could be JSON or plain string)
-                secret_string = response['SecretString']
+            for secret_name in self.secret_names:
                 try:
-                    secret_dict = json.loads(secret_string)
-                    # If JSON, look for 'openai_api_key' or 'api_key' key
-                    api_key = secret_dict.get('openai_api_key') or secret_dict.get('api_key')
+                    logging.info(f"Attempting to retrieve secret: {secret_name}")
+                    response = self._client.get_secret_value(SecretId=secret_name)
+                    
+                    # Parse secret (could be JSON or plain string)
+                    secret_string = response['SecretString']
+                    api_key = None
+                    
+                    try:
+                        secret_dict = json.loads(secret_string)
+                        # If JSON, look for common key names (try in order of preference)
+                        # Support multiple key formats from different secrets
+                        api_key = (
+                            secret_dict.get('api_key1') or      # Primary key from openai/api-key
+                            secret_dict.get('api_key2') or      # Backup key from openai/api-key
+                            secret_dict.get('apiKey') or       # Key from openai/assistant
+                            secret_dict.get('openai_api_key') or 
+                            secret_dict.get('api_key') or
+                            secret_dict.get('OPENAI_API_KEY') or
+                            secret_dict.get('key')
+                        )
+                    except json.JSONDecodeError:
+                        # Plain string secret
+                        api_key = secret_string.strip()
+                    
                     if api_key:
                         self._cached_key = api_key
                         self._cache_timestamp = time.time()
+                        self._last_successful_secret = secret_name
+                        logging.info(f"Successfully retrieved API key from secret: {secret_name}")
                         return api_key
-                except json.JSONDecodeError:
-                    # Plain string secret
-                    self._cached_key = secret_string
-                    self._cache_timestamp = time.time()
-                    return secret_string
+                    else:
+                        logging.warning(f"Secret {secret_name} found but no API key value in it")
+                
+                except ClientError as e:
+                    error_code = e.response['Error']['Code']
+                    if error_code == 'ResourceNotFoundException':
+                        logging.warning(f"Secret {secret_name} not found in AWS Secrets Manager, trying next...")
+                        continue  # Try next secret
+                    elif error_code == 'AccessDeniedException':
+                        logging.warning(f"Access denied to secret {secret_name}, trying next...")
+                        continue  # Try next secret
+                    else:
+                        logging.warning(f"Error retrieving secret {secret_name}: {str(e)}, trying next...")
+                        continue  # Try next secret
+                
+                except Exception as e:
+                    logging.warning(f"Unexpected error retrieving secret {secret_name}: {str(e)}, trying next...")
+                    continue  # Try next secret
             
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                if error_code == 'ResourceNotFoundException':
-                    logging.error(f"Secret {self.secret_name} not found in AWS Secrets Manager")
-                elif error_code == 'AccessDeniedException':
-                    logging.error(f"Access denied to secret {self.secret_name}. Check IAM permissions.")
-                else:
-                    logging.error(f"Error retrieving secret: {str(e)}")
-            
-            except Exception as e:
-                logging.error(f"Unexpected error retrieving secret: {str(e)}")
+            # If we get here, all secrets failed
+            logging.error(f"Failed to retrieve API key from all secrets: {self.secret_names}")
         
         # Fallback to environment variable (for local development)
         fallback_key = os.getenv("OPENAI_API_KEY")

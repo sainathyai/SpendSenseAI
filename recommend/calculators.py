@@ -8,7 +8,7 @@ Provide actionable tools within recommendations:
 - Budget planner for variable income
 """
 
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from dataclasses import dataclass
 from math import ceil, log
 from datetime import date, timedelta

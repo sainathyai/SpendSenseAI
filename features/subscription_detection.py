@@ -296,6 +296,27 @@ def detect_subscriptions(
     return subscriptions
 
 
+def calculate_subscription_share(
+    subscriptions: List[SubscriptionPattern],
+    total_spend: float
+) -> float:
+    """
+    Calculate subscription share as percentage of total spend.
+    
+    Args:
+        subscriptions: List of detected subscriptions
+        total_spend: Total spending in the period
+        
+    Returns:
+        Subscription share as percentage (0.0 to 100.0)
+    """
+    if total_spend <= 0:
+        return 0.0
+    
+    total_monthly_recurring = sum(s.monthly_recurring_spend for s in subscriptions)
+    return (total_monthly_recurring / total_spend * 100) if total_spend > 0 else 0.0
+
+
 def calculate_subscription_metrics(
     subscriptions: List[SubscriptionPattern],
     total_spend: float
@@ -317,7 +338,7 @@ def calculate_subscription_metrics(
     subscription_count = len(subscriptions)
     active_count = len(active_subscriptions)
     
-    subscription_share = (total_monthly_recurring / total_spend * 100) if total_spend > 0 else 0.0
+    subscription_share = calculate_subscription_share(subscriptions, total_spend)
     
     return {
         'subscription_count': subscription_count,

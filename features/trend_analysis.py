@@ -15,8 +15,9 @@ from datetime import datetime, date, timedelta
 from dataclasses import dataclass
 from collections import defaultdict
 
-from personas.persona_prioritization import assign_personas_with_prioritization
+# Import PersonaType at module level (no circular dependency)
 from personas.persona_definition import PersonaType
+# Lazy import for assign_personas_with_prioritization to avoid circular dependency
 from features.subscription_detection import detect_subscriptions_for_customer
 from features.credit_utilization import analyze_credit_utilization_for_customer
 from features.savings_pattern import analyze_savings_patterns_for_customer
@@ -286,6 +287,9 @@ def track_persona_evolution(
     persona_evolution = {}
     
     try:
+        # Lazy import to avoid circular dependency
+        from personas.persona_prioritization import assign_personas_with_prioritization
+        
         # Current persona (30-day window)
         persona_assignment = assign_personas_with_prioritization(user_id, db_path)
         

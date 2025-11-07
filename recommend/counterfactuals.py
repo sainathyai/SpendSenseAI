@@ -236,7 +236,56 @@ def generate_counterfactual_scenarios(
                         },
                         confidence=0.85
                     ))
-    except Exception:
+                    
+            # Scenario 1b: Pay off credit card completely
+            if card.balance > 0:
+                # Calculate time to pay off at different payment amounts
+                monthly_interest_rate = 0.22 / 12  # 22% APR
+                
+                # Scenario: Pay $100/month more
+                additional_payment = 100
+                current_monthly_payment = card.balance * 0.02  # Assume 2% minimum
+                new_monthly_payment = current_monthly_payment + additional_payment
+                
+                # Simple payoff calculation
+                remaining_balance = card.balance
+                months_to_payoff = 0
+                total_interest = 0
+                
+                while remaining_balance > 0 and months_to_payoff < 120:  # Max 10 years
+                    monthly_interest = remaining_balance * monthly_interest_rate
+                    total_interest += monthly_interest
+                    remaining_balance = remaining_balance + monthly_interest - new_monthly_payment
+                    months_to_payoff += 1
+                    
+                    if remaining_balance < new_monthly_payment:
+                        remaining_balance = 0
+                        break
+                
+                if months_to_payoff < 120:
+                    scenarios.append(CounterfactualScenario(
+                        scenario_id="CF-PAYOFF-001",
+                        title=f"Pay Off Credit Card in {months_to_payoff} Months",
+                        description=f"If you increase your monthly payment by ${additional_payment:.0f}, you could pay off your ${card.balance:,.0f} balance in {months_to_payoff} months.",
+                        current_state={
+                            "balance": card.balance,
+                            "monthly_payment": current_monthly_payment,
+                            "interest_rate": "22% APR"
+                        },
+                        hypothetical_state={
+                            "monthly_payment": new_monthly_payment,
+                            "months_to_payoff": months_to_payoff,
+                            "total_interest_paid": total_interest
+                        },
+                        impact={
+                            "months_to_payoff": months_to_payoff,
+                            "total_interest_saved": (card.balance * 0.5) - total_interest,  # Rough estimate
+                            "increased_monthly_payment": additional_payment
+                        },
+                        time_to_achieve=f"{months_to_payoff} months",
+                        confidence=0.75
+                    ))
+    except Exception as e:
         pass
     
     # Scenario 2: Emergency fund building
@@ -295,7 +344,7 @@ def generate_counterfactual_scenarios(
                 scenarios.append(CounterfactualScenario(
                     scenario_id="CF-SUB-001",
                     title="Cancel Top 3 Subscriptions",
-                    description=f"If you cancel your top 3 subscriptions, you could save significant money annually.",
+                    description=f"If you cancel your top 3 subscriptions ({', '.join(savings['subscription_names'][:3])}), you could save ${savings['annual_savings']:,.0f} annually.",
                     current_state={
                         "total_subscriptions": savings["total_subscriptions"],
                         "monthly_spend": sub_metrics.get("total_monthly_recurring_spend", 0)
@@ -311,6 +360,95 @@ def generate_counterfactual_scenarios(
                     },
                     confidence=0.90
                 ))
+    except Exception:
+        pass
+    
+    # Scenario 4: Income buffer building (for variable income)
+    try:
+        income_metrics = analyze_income_stability_for_customer(user_id, db_path, 180)
+        accounts = get_accounts_by_customer(user_id, db_path)
+        
+        if income_metrics and income_metrics.median_pay_gap_days > 30:
+            # Get checking account balance
+            checking_balance = 0
+            for acc in accounts:
+                if hasattr(acc, 'subtype') and acc.subtype.value == "checking":
+                    checking_balance = acc.balances.current
+                    break
+            
+            # Calculate needed buffer
+            median_income = income_metrics.median_income_amount if hasattr(income_metrics, 'median_income_amount') else 2000
+            pay_gap_months = income_metrics.median_pay_gap_days / 30
+            target_buffer = median_income * pay_gap_months
+            
+            if checking_balance < target_buffer:
+                savings_needed = target_buffer - checking_balance
+                
+                # Assume saving 10% of income
+                months_to_buffer = ceil(savings_needed / (median_income * 0.10))
+                
+                scenarios.append(CounterfactualScenario(
+                    scenario_id="CF-BUFFER-001",
+                    title="Build Income Buffer for Variable Paychecks",
+                    description=f"If you build a {pay_gap_months:.1f}-month income buffer, you can better manage the {income_metrics.median_pay_gap_days:.0f}-day gap between paychecks.",
+                    current_state={
+                        "checking_balance": checking_balance,
+                        "pay_gap_days": income_metrics.median_pay_gap_days,
+                        "current_buffer_months": checking_balance / median_income if median_income > 0 else 0
+                    },
+                    hypothetical_state={
+                        "target_buffer": target_buffer,
+                        "buffer_months": pay_gap_months,
+                        "reduced_overdraft_risk": True
+                    },
+                    impact={
+                        "savings_needed": savings_needed,
+                        "months_to_achieve": months_to_buffer,
+                        "monthly_savings_required": median_income * 0.10
+                    },
+                    time_to_achieve=f"{months_to_buffer} months",
+                    confidence=0.70
+                ))
+    except Exception:
+        pass
+    
+    # Scenario 5: Savings growth acceleration
+    try:
+        savings_accounts, savings_metrics = analyze_savings_patterns_for_customer(user_id, db_path, 180)
+        
+        if savings_accounts and savings_metrics.overall_growth_rate > 0:
+            current_savings = savings_metrics.total_savings_balance
+            current_monthly_inflow = savings_metrics.average_monthly_inflow
+            
+            # Scenario: Increase savings by 20%
+            increased_savings = current_monthly_inflow * 1.20
+            additional_savings = increased_savings - current_monthly_inflow
+            
+            # Project 1-year growth
+            one_year_growth = increased_savings * 12
+            
+            scenarios.append(CounterfactualScenario(
+                scenario_id="CF-SAVE-001",
+                title="Accelerate Savings Growth by 20%",
+                description=f"If you increase your monthly savings by ${additional_savings:.0f} (20% more), you could have an additional ${one_year_growth:,.0f} saved in one year.",
+                current_state={
+                    "current_savings": current_savings,
+                    "monthly_savings": current_monthly_inflow,
+                    "growth_rate": f"{savings_metrics.overall_growth_rate:.1f}%"
+                },
+                hypothetical_state={
+                    "monthly_savings": increased_savings,
+                    "projected_one_year_balance": current_savings + one_year_growth,
+                    "increased_growth_rate": f"{savings_metrics.overall_growth_rate * 1.2:.1f}%"
+                },
+                impact={
+                    "additional_monthly_savings": additional_savings,
+                    "one_year_additional_savings": one_year_growth,
+                    "three_year_projection": current_savings + (one_year_growth * 3)
+                },
+                time_to_achieve="12 months",
+                confidence=0.80
+            ))
     except Exception:
         pass
     

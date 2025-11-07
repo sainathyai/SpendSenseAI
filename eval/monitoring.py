@@ -81,9 +81,15 @@ class SystemHealth:
     overall_status: str  # "healthy", "degraded", "unhealthy"
     health_checks: List[HealthCheck]
     performance_metrics: Optional[PerformanceMetrics] = None
-    data_quality_alerts: List[DataQualityAlert] = []
-    anomaly_alerts: List[AnomalyAlert] = []
+    data_quality_alerts: Optional[List[DataQualityAlert]] = None
+    anomaly_alerts: Optional[List[AnomalyAlert]] = None
     health_score: float = 0.0
+    
+    def __post_init__(self):
+        if self.data_quality_alerts is None:
+            self.data_quality_alerts = []
+        if self.anomaly_alerts is None:
+            self.anomaly_alerts = []
 
 
 def check_database_health(db_path: str) -> HealthCheck:

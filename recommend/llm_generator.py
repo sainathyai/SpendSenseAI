@@ -14,6 +14,14 @@ from enum import Enum
 from dataclasses import dataclass
 import logging
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load .env file into environment
+    logging.info("Loaded environment variables from .env file")
+except ImportError:
+    logging.warning("python-dotenv not installed. Using system environment variables only.")
+
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
@@ -109,7 +117,7 @@ class LLMTextGenerator:
             timeout=int(os.getenv("OPENAI_TIMEOUT", "10")),
             enable_llm=os.getenv("ENABLE_LLM", "true").lower() == "true",
             fallback_to_templates=os.getenv("LLM_FALLBACK_TO_TEMPLATES", "true").lower() == "true",
-            use_aws_secrets=os.getenv("USE_AWS_SECRETS", "false").lower() == "true",
+            use_aws_secrets=os.getenv("USE_AWS_SECRETS", "true").lower() == "true",  # Default to true
             use_lambda_proxy=os.getenv("USE_LAMBDA_PROXY", "false").lower() == "true"
         )
     
@@ -392,4 +400,111 @@ def generate_rationale_with_llm(
         offer_description=offer_description,
         fallback_generator=fallback_generator
     )
+
+
+def test_llm_connection():
+    """
+    Test LLM connection and generate a sample rationale.
+    
+    This function tests:
+    1. Environment variable loading
+    2. OpenAI API key configuration
+    3. API connection
+    4. Rationale generation
+    
+    Returns:
+        bool: True if test passes, False otherwise
+    """
+    print("=" * 60)
+    print("🧪 Testing LLM Connection")
+    print("=" * 60)
+    
+    # Check environment variables
+    print("\n1️⃣  Checking Environment Variables...")
+    api_key = os.getenv("OPENAI_API_KEY")
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    enable_llm = os.getenv("ENABLE_LLM", "true").lower() == "true"
+    
+    if not api_key or api_key == "your_openai_api_key_here":
+        print("❌ OPENAI_API_KEY not configured in .env file")
+        print("   💡 Edit .env and add your OpenAI API key")
+        return False
+    
+    print(f"✅ API Key found: {api_key[:10]}... (length: {len(api_key)})")
+    print(f"✅ Model: {model}")
+    print(f"✅ LLM Enabled: {enable_llm}")
+    
+    # Check OpenAI package
+    print("\n2️⃣  Checking OpenAI Package...")
+    if not OPENAI_AVAILABLE:
+        print("❌ OpenAI package not installed")
+        print("   💡 Run: pip install openai")
+        return False
+    print("✅ OpenAI package available")
+    
+    # Test generator initialization
+    print("\n3️⃣  Initializing LLM Generator...")
+    try:
+        generator = get_llm_generator()
+        if not generator.client:
+            print("❌ LLM client not initialized")
+            return False
+        print("✅ Generator initialized successfully")
+    except Exception as e:
+        print(f"❌ Failed to initialize generator: {e}")
+        return False
+    
+    # Test rationale generation
+    print("\n4️⃣  Testing Rationale Generation...")
+    test_data = {
+        'persona_type': 'high_utilization',
+        'utilization_percentage': 68.5,
+        'balance': 3400,
+        'limit': 5000,
+        'monthly_interest': 87
+    }
+    
+    try:
+        rationale = generator.generate_rationale(
+            recommendation_type='education',
+            data_citations=test_data,
+            tone=Tone.SUPPORTIVE,
+            persona_type='high_utilization',
+            content_title='Credit Utilization Guide',
+            content_description='Learn how to reduce your credit utilization and save on interest.'
+        )
+        
+        print(f"✅ Rationale generated successfully!")
+        print(f"\n📝 Sample Rationale:")
+        print(f"   {rationale}")
+        
+        # Validate rationale quality
+        if len(rationale) < 50:
+            print("\n⚠️  Warning: Rationale seems too short")
+        elif "you're overspending" in rationale.lower() or "you should stop" in rationale.lower():
+            print("\n⚠️  Warning: Rationale contains shaming language")
+        else:
+            print("\n✅ Rationale quality check passed")
+        
+    except Exception as e:
+        print(f"❌ Failed to generate rationale: {e}")
+        print(f"   Error type: {type(e).__name__}")
+        return False
+    
+    print("\n" + "=" * 60)
+    print("🎉 LLM Integration Test PASSED!")
+    print("=" * 60)
+    print("\n💡 Next steps:")
+    print("   1. Run full smoke test: python scripts/smoke_test.py")
+    print("   2. Generate recommendations: curl http://localhost:8000/recommendations/CUST000001")
+    print("   3. Check LLM usage in OpenAI dashboard")
+    
+    return True
+
+
+if __name__ == "__main__":
+    # Run test when module is executed directly
+    import sys
+    success = test_llm_connection()
+    sys.exit(0 if success else 1)
 

@@ -17,7 +17,8 @@ from pathlib import Path
 
 from personas.persona_definition import PersonaType
 from personas.persona_prioritization import assign_personas_with_prioritization
-from recommend.recommendation_builder import build_recommendations
+# Lazy import to avoid circular dependency
+# from recommend.recommendation_builder import build_recommendations
 from ingest.queries import get_accounts_by_customer
 
 
@@ -97,7 +98,8 @@ def analyze_demographic_parity(
                     persona_counts[persona_type] = persona_counts.get(persona_type, 0) + 1
                     total_confidence += persona_assignment.primary_persona.confidence_score
                     
-                    # Get recommendations
+                    # Get recommendations (lazy import to avoid circular dependency)
+                    from recommend.recommendation_builder import build_recommendations
                     recommendations = build_recommendations(
                         user_id, db_path, persona_assignment,
                         check_consent=False

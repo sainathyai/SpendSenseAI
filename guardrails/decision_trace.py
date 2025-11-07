@@ -21,7 +21,14 @@ import sqlite3
 from contextlib import contextmanager
 
 from personas.persona_definition import PersonaAssignment, PersonaType
-from recommend.recommendation_builder import RecommendationSet
+
+# Use TYPE_CHECKING to avoid circular dependency
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from recommend.recommendation_builder import RecommendationSet
+else:
+    # Use string for runtime type hints
+    RecommendationSet = "RecommendationSet"
 
 
 class ReviewStatus(str, Enum):
@@ -79,7 +86,7 @@ class DecisionTrace:
     persona_assignment: PersonaAssignment
     
     # Recommendations
-    recommendations: RecommendationSet
+    recommendations: "RecommendationSet"
     
     # Operator review
     review_status: ReviewStatus = ReviewStatus.PENDING
@@ -150,7 +157,7 @@ def create_decision_trace(
     db_path: str,
     signals: List[SignalTrace],
     persona_assignment: PersonaAssignment,
-    recommendations: RecommendationSet,
+    recommendations: "RecommendationSet",
     trace_id: Optional[str] = None
 ) -> DecisionTrace:
     """
