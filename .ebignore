@@ -59,11 +59,10 @@ apprunner-config.json
 Dockerfile
 .dockerignore
 
-# Data files (except database)
+# Data files
 data/raw/
-data/processed/
-# Don't include database in deployment - will be copied separately
-data/
+# Don't include local SQLite database in deployment
+data/spendsense.db
 
 # Deployment files
 DEPLOYMENT_QUICKSTART.md
