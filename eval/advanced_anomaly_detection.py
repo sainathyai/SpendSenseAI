@@ -287,3 +287,4 @@ def save_user_anomaly(
         
         conn.commit()
 
+

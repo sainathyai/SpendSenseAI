@@ -372,7 +372,7 @@ def synthesize_liabilities(
         if not account_transactions:
             continue
         
-        # Extract payment history
+        # Extract payment history (payments are negative amounts for credit cards)
         payment_history = extract_payment_history(account, df)
         
         # Synthesize APR based on utilization
@@ -381,11 +381,19 @@ def synthesize_liabilities(
         # Calculate minimum payment
         minimum_payment = calculate_minimum_payment(account.balances.current)
         
-        # Determine overdue status
-        is_overdue = determine_overdue_status(payment_history, account.balances.current)
+        # Estimate next payment due date based on payment history
+        # Use last payment date if available, otherwise use last transaction date
+        last_payment_date = payment_history[0]['date'] if payment_history else None
+        last_transaction_date = max(t.date for t in account_transactions) if account_transactions else None
         
-        # Estimate next payment due date
-        next_payment_due_date = estimate_next_payment_due_date(payment_history)
+        # Use last payment date as reference (most accurate for due dates)
+        # If no payment history, use last transaction date as fallback
+        reference_date = last_payment_date if last_payment_date else last_transaction_date
+        
+        next_payment_due_date = estimate_next_payment_due_date(payment_history, reference_date)
+        
+        # Determine overdue status (now using due date for accuracy)
+        is_overdue = determine_overdue_status(payment_history, account.balances.current, next_payment_due_date)
         
         # Get last payment amount
         last_payment_amount = payment_history[-1]['amount'] if payment_history else None
@@ -510,17 +518,23 @@ def calculate_minimum_payment(balance: float) -> float:
     return round(minimum)
 
 
-def determine_overdue_status(payment_history: List[Dict], current_balance: float) -> bool:
+def determine_overdue_status(
+    payment_history: List[Dict], 
+    current_balance: float,
+    next_payment_due_date: Optional[date] = None
+) -> bool:
     """
     Determine if credit card account is overdue.
     
     Account is overdue if:
     - Balance > 0
-    - No payment in last 30 days
+    - Payment due date has passed
+    - No payment made after the due date
     
     Args:
         payment_history: List of payment records (sorted by date, most recent first)
         current_balance: Current credit card balance
+        next_payment_due_date: Next payment due date (if available)
         
     Returns:
         True if overdue, False otherwise
@@ -528,32 +542,57 @@ def determine_overdue_status(payment_history: List[Dict], current_balance: float
     if current_balance <= 0:
         return False  # No balance, not overdue
     
+    # If we have a due date, use it (most accurate)
+    if next_payment_due_date:
+        today = date.today()
+        if today > next_payment_due_date:
+            # Due date has passed - check if payment was made after due date
+            if payment_history:
+                last_payment_date = payment_history[0]['date']
+                # If last payment was after due date, not overdue
+                if last_payment_date > next_payment_due_date:
+                    return False
+            # Due date passed and no payment (or payment before due date) = overdue
+            return True
+        else:
+            # Due date hasn't passed yet, not overdue
+            return False
+    
+    # Fallback: If no due date, use payment history heuristic
     if not payment_history:
-        # No payment history, check if balance exists for more than 30 days
-        # This is a simplified check - in real system, would check statement date
-        return True  # Assume overdue if no payments
+        # No payment history and no due date - can't determine, assume not overdue
+        # (More conservative than assuming overdue)
+        return False
     
     # Get most recent payment date
     last_payment_date = payment_history[0]['date']
     days_since_payment = (date.today() - last_payment_date).days
     
-    # Overdue if no payment in 30+ days
-    return days_since_payment > 30
+    # Only mark overdue if no payment in 60+ days (more conservative)
+    # This is a fallback when due date is not available
+    return days_since_payment > 60
 
 
-def estimate_next_payment_due_date(payment_history: List[Dict]) -> Optional[date]:
+def estimate_next_payment_due_date(
+    payment_history: List[Dict],
+    last_transaction_date: Optional[date] = None
+) -> Optional[date]:
     """
     Estimate next payment due date from payment history.
     
     Args:
         payment_history: List of payment records (sorted by date, most recent first)
+        last_transaction_date: Last transaction date for the account (if available)
         
     Returns:
         Estimated next payment due date, or None if no history
     """
+    # Use last transaction date as reference if available, otherwise use today
+    reference_date = last_transaction_date if last_transaction_date else date.today()
+    
     if not payment_history or len(payment_history) < 2:
-        # Not enough history, estimate 30 days from today
-        return date.today() + timedelta(days=30)
+        # Not enough history, estimate 30 days from last transaction or today
+        return reference_date + timedelta(days=30)
     
     # Calculate average payment interval
     intervals = []
@@ -570,9 +609,10 @@ def estimate_next_payment_due_date(payment_history: List[Dict]) -> Optional[date
     last_payment_date = payment_history[0]['date']
     next_due_date = last_payment_date + timedelta(days=int(avg_interval))
     
-    # Ensure due date is in future
-    if next_due_date < date.today():
-        next_due_date = date.today() + timedelta(days=30)
+    # Ensure due date is at least 30 days from reference date
+    min_due_date = reference_date + timedelta(days=30)
+    if next_due_date < min_due_date:
+        next_due_date = min_due_date
     
     return next_due_date
 

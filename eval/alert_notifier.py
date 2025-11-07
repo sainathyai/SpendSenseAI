@@ -418,3 +418,4 @@ def load_alert_configs() -> List[AlertConfig]:
     
     return configs
 
+

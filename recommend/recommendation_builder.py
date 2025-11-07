@@ -391,13 +391,52 @@ def build_recommendations(
                 generated_at=date.today()
             )
     
+    # If no persona assigned, use fallback to generate generic recommendations
     if not persona_assignment.primary_persona:
-        # No persona matched, return empty recommendations
+        # Generate generic recommendations for customers without a specific persona
+        # Use general financial education content
+        from recommend.content_catalog import DEFAULT_CONTENT_CATALOG
+        
+        # Get general content (content that targets multiple personas or general advice)
+        general_content = []
+        for content in DEFAULT_CONTENT_CATALOG.values():
+            # Include content that targets multiple personas or is beginner-friendly
+            if len(content.target_personas) > 1 or content.difficulty.value == 'beginner':
+                general_content.append(content)
+        
+        # Sort by estimated time and take top 5
+        general_content.sort(key=lambda c: c.estimated_time_minutes)
+        general_content = general_content[:5]
+        
+        # Build generic education recommendations
+        education_items = []
+        for i, content in enumerate(general_content):
+            # Extract basic data citations
+            basic_citations = extract_data_citations(customer_id, db_path, PersonaType.HIGH_UTILIZATION)  # Use any persona type for basic data
+            
+            rationale = f"{content.description} This general financial guidance can help improve your financial situation."
+            
+            recommendation = RecommendationItem(
+                recommendation_id=f"REC-{customer_id}-EDU-GEN-{i+1}",
+                type='education',
+                title=content.title,
+                description=content.description,
+                rationale=rationale,
+                content_id=content.content_id,
+                priority=i+1,
+                data_citations=basic_citations
+            )
+            education_items.append(recommendation)
+        
+        # Generate counterfactual scenarios (these don't require a persona)
+        counterfactual_scenarios = generate_counterfactual_scenarios(customer_id, db_path)
+        
         return RecommendationSet(
             customer_id=customer_id,
             persona_assignment=persona_assignment,
-            education_items=[],
-            partner_offers=[],
+            education_items=education_items,
+            partner_offers=[],  # No offers without persona
+            counterfactual_scenarios=counterfactual_scenarios,
             generated_at=date.today()
         )
     
@@ -500,7 +539,9 @@ def format_recommendations_for_api(recommendation_set: RecommendationSet) -> Dic
                 'description': rec.description,
                 'rationale': rec.rationale,
                 'content_id': rec.content_id,
-                'priority': rec.priority
+                'priority': rec.priority,
+                'data_citations': rec.data_citations or {},
+                'content_url': f"https://example.com/content/{rec.content_id}" if rec.content_id else None
             }
             for rec in recommendation_set.education_items
         ],
@@ -511,7 +552,9 @@ def format_recommendations_for_api(recommendation_set: RecommendationSet) -> Dic
                 'description': rec.description,
                 'rationale': rec.rationale,
                 'offer_id': rec.offer_id,
-                'priority': rec.priority
+                'priority': rec.priority,
+                'data_citations': rec.data_citations or {},
+                'eligibility_reason': rec.rationale.split('.')[0] if rec.rationale else None
             }
             for rec in recommendation_set.partner_offers
         ],

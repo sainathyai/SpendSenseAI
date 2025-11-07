@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Role for sainathyai projects - Secrets Manager Access (generic across all projects)'
+
+Parameters:
+  SecretArn:
+    Type: String
+    Default: 'arn:aws:secretsmanager:us-east-1:971422717446:secret:openai/sainathyai-*'
+    Description: 'ARN pattern for Secrets Manager secret'
+
+Resources:
+  SecretsManagerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: sainathyai-secretsmanager-access
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowGetSecretValue
+            Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+            Resource: !Ref SecretArn
+      Roles:
+        - !Ref SainathyaiApplicationRole
+
+  SainathyaiApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sainathyai-application-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Tags:
+        - Key: Owner
+          Value: sainathyai
+        - Key: Purpose
+          Value: Secrets Manager Access
+
+Outputs:
+  IAMRoleArn:
+    Description: ARN of the IAM role
+    Value: !GetAtt SainathyaiApplicationRole.Arn
+    Export:
+      Name: sainathyai-IAMRoleArn
+  
+  IAMRoleName:
+    Description: Name of the IAM role
+    Value: !Ref SainathyaiApplicationRole
+    Export:
+      Name: sainathyai-IAMRoleName
+

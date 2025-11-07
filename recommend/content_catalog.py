@@ -429,6 +429,13 @@ def get_content_for_persona(
         if persona_type in content.target_personas
     ]
     
+    # If no content found for this persona, get general beginner content
+    if not content_list:
+        content_list = [
+            content for content in catalog.values()
+            if content.difficulty.value == 'beginner'
+        ]
+    
     # Sort by estimated_time_minutes (ascending) for easier content first
     content_list.sort(key=lambda c: c.estimated_time_minutes)
     

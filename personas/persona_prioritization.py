@@ -250,6 +250,20 @@ def assign_personas_with_prioritization(
     if primary == persona_30d and secondary == persona_180d:
         primary, secondary = secondary, primary
     
+    # If no persona matched, assign default "Savings Builder" persona (positive default)
+    if not primary:
+        from personas.persona_definition import PersonaMatch, PersonaType
+        default_persona = PersonaMatch(
+            persona_type=PersonaType.SAVINGS_BUILDER,
+            confidence_score=0.5,  # Lower confidence for default
+            criteria_met=["Default assignment - no specific patterns detected"],
+            window_days=180,
+            focus_areas=["General financial wellness", "Building savings", "Financial planning"],
+            supporting_data={"reason": "Default persona assigned - customer shows healthy financial patterns"}
+        )
+        primary = default_persona
+        persona_180d = default_persona  # Also set as 180-day window
+    
     return PersonaAssignment(
         customer_id=customer_id,
         primary_persona=primary,
