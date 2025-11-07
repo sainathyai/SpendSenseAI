@@ -1245,6 +1245,146 @@ async def get_dashboard_metrics():
 
 
 # ============================================================================
+# A/B Testing Endpoints
+# ============================================================================
+
+@app.post("/experiments", tags=["experiments"], description="Create a new A/B test experiment.")
+async def create_experiment(
+    experiment_id: str,
+    name: str,
+    description: str,
+    variants: List[Dict[str, Any]]
+):
+    """Create a new A/B test experiment."""
+    from eval.ab_testing import create_experiment, Experiment, ExperimentVariant, ExperimentStatus, VariantType
+    from datetime import datetime
+    
+    try:
+        variant_objects = []
+        for v in variants:
+            variant_objects.append(ExperimentVariant(
+                variant_id=v["variant_id"],
+                variant_type=VariantType(v["variant_type"]),
+                name=v["name"],
+                description=v.get("description", ""),
+                configuration=v.get("configuration", {}),
+                traffic_percentage=v.get("traffic_percentage", 50.0)
+            ))
+        
+        experiment = Experiment(
+            experiment_id=experiment_id,
+            name=name,
+            description=description,
+            status=ExperimentStatus.DRAFT,
+            variants=variant_objects,
+            start_date=datetime.now(),
+            target_sample_size=None,
+            min_sample_size=100
+        )
+        
+        exp_id = create_experiment(experiment, DB_PATH)
+        
+        return {
+            "experiment_id": exp_id,
+            "message": "Experiment created successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating experiment: {str(e)}")
+
+
+@app.get("/experiments/{experiment_id}", tags=["experiments"], description="Get experiment details.")
+async def get_experiment_details(experiment_id: str):
+    """Get experiment details."""
+    from eval.ab_testing import get_experiment
+    
+    try:
+        experiment = get_experiment(experiment_id, DB_PATH)
+        if not experiment:
+            raise HTTPException(status_code=404, detail="Experiment not found")
+        
+        return {
+            "experiment_id": experiment.experiment_id,
+            "name": experiment.name,
+            "description": experiment.description,
+            "status": experiment.status.value,
+            "start_date": experiment.start_date.isoformat(),
+            "end_date": experiment.end_date.isoformat() if experiment.end_date else None,
+            "variants": [
+                {
+                    "variant_id": v.variant_id,
+                    "variant_type": v.variant_type.value,
+                    "name": v.name,
+                    "description": v.description,
+                    "traffic_percentage": v.traffic_percentage
+                }
+                for v in experiment.variants
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving experiment: {str(e)}")
+
+
+@app.get("/experiments/{experiment_id}/results", tags=["experiments"], description="Get experiment results.")
+async def get_experiment_results(experiment_id: str):
+    """Get experiment results with statistical analysis."""
+    from eval.ab_testing import analyze_experiment_results
+    
+    try:
+        results = analyze_experiment_results(experiment_id, DB_PATH)
+        
+        return {
+            "experiment_id": experiment_id,
+            "results": [
+                {
+                    "variant_id": r.variant_id,
+                    "variant_type": r.variant_type.value,
+                    "sample_size": r.sample_size,
+                    "engagement_rate": r.engagement_rate,
+                    "completion_rate": r.completion_rate,
+                    "conversion_rate": r.conversion_rate,
+                    "average_outcome_improvement": r.average_outcome_improvement,
+                    "statistical_significance": r.statistical_significance,
+                    "confidence_interval_lower": r.confidence_interval_lower,
+                    "confidence_interval_upper": r.confidence_interval_upper,
+                    "is_winner": r.is_winner
+                }
+                for r in results
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing experiment: {str(e)}")
+
+
+@app.post("/experiments/{experiment_id}/start", tags=["experiments"], description="Start an experiment.")
+async def start_experiment(experiment_id: str):
+    """Start an experiment."""
+    from eval.ab_testing import get_experiment, create_ab_testing_tables
+    from ingest.database import get_connection
+    
+    try:
+        create_ab_testing_tables(DB_PATH)
+        
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE ab_experiments 
+                SET status = ? 
+                WHERE experiment_id = ?
+            """, (ExperimentStatus.RUNNING.value, experiment_id))
+            conn.commit()
+        
+        return {
+            "experiment_id": experiment_id,
+            "status": "running",
+            "message": "Experiment started successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error starting experiment: {str(e)}")
+
+
+# ============================================================================
 # Startup
 # ============================================================================
 
@@ -1258,6 +1398,10 @@ async def startup_event():
     # Initialize cost tracking tables
     from eval.cost_tracking import create_cost_tracking_tables
     create_cost_tracking_tables(DB_PATH)
+    
+    # Initialize A/B testing tables
+    from eval.ab_testing import create_ab_testing_tables
+    create_ab_testing_tables(DB_PATH)
 
 
 if __name__ == "__main__":
