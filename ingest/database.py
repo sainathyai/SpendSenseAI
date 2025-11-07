@@ -118,7 +118,9 @@ def get_connection(db_path: str):
     Yields:
         sqlite3.Connection: Database connection
     """
-    conn = sqlite3.connect(db_path)
+    db_location = Path(db_path)
+    db_location.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_location)
     conn.row_factory = sqlite3.Row  # Enable column access by name
     try:
         yield conn

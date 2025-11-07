@@ -44,6 +44,7 @@ from ingest.queries import (
     get_all_customers_with_summary,
     get_transactions_summary_by_category
 )
+from ingest.database import create_database
 from eval.effectiveness_tracking import (
     track_engagement,
     track_outcome,
@@ -1650,6 +1651,9 @@ async def detect_user_anomalies(user_id: str):
 @app.on_event("startup")
 async def startup_event():
     """Initialize database tables on startup."""
+    # Ensure core data tables exist
+    create_database(DB_PATH)
+
     # Ensure decision trace tables exist
     create_decision_trace_tables(DB_PATH)
     create_effectiveness_tables(DB_PATH)
