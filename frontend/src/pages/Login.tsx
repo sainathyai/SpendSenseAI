@@ -13,10 +13,8 @@ import {
 import {
   WalletOutlined,
   UserOutlined,
-  LockOutlined,
   ArrowRightOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 
 const { Title, Text } = Typography;

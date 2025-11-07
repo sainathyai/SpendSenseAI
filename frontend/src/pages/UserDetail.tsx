@@ -2,7 +2,6 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Card,
-  Descriptions,
   Spin,
   Alert,
   Space,
@@ -14,7 +13,6 @@ import {
   Divider,
   Button,
   List,
-  Badge,
   Collapse,
 } from 'antd';
 import {
@@ -24,7 +22,6 @@ import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
   BulbOutlined,
-  InfoCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
@@ -293,7 +290,7 @@ const UserDetail = () => {
                     📚 Educational Content
                   </Title>
                   <List
-                    dataSource={recommendationsData.data.education_items}
+                    dataSource={recommendationsData?.data?.education_items || []}
                     style={{ marginBottom: 32 }}
                     renderItem={(rec: any, index: number) => (
                       <List.Item
@@ -338,7 +335,7 @@ const UserDetail = () => {
                     💼 Partner Offers
                   </Title>
                   <List
-                    dataSource={recommendationsData.data.partner_offers}
+                    dataSource={recommendationsData?.data?.partner_offers || []}
                     renderItem={(rec: any, index: number) => (
                       <List.Item
                         style={{
@@ -386,7 +383,7 @@ const UserDetail = () => {
         </Card>
 
         {/* Developer Debug - Hidden by default */}
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.DEV && (
           <Card title="Debug: Raw Profile Data" style={{ borderRadius: 16, opacity: 0.6 }}>
             <Collapse
               items={[
