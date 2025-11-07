@@ -1360,7 +1360,7 @@ async def get_experiment_results(experiment_id: str):
 @app.post("/experiments/{experiment_id}/start", tags=["experiments"], description="Start an experiment.")
 async def start_experiment(experiment_id: str):
     """Start an experiment."""
-    from eval.ab_testing import get_experiment, create_ab_testing_tables
+    from eval.ab_testing import get_experiment, create_ab_testing_tables, ExperimentStatus
     from ingest.database import get_connection
     
     try:
@@ -1382,6 +1382,92 @@ async def start_experiment(experiment_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting experiment: {str(e)}")
+
+
+# ============================================================================
+# Advanced Cohort Analysis Endpoints
+# ============================================================================
+
+@app.get("/cohorts/predictive", tags=["cohorts"], description="Get predictive cohorts.")
+async def get_predictive_cohorts():
+    """Get predictive cohorts based on behavior patterns."""
+    from eval.cohort_analysis import create_predictive_cohorts
+    from ingest.queries import get_all_customers
+    
+    try:
+        customers = get_all_customers(DB_PATH)
+        user_ids = [c.customer_id if hasattr(c, 'customer_id') else c for c in customers]
+        
+        cohorts = create_predictive_cohorts(user_ids, DB_PATH)
+        
+        return {
+            "cohorts": {
+                cohort_name: {
+                    "user_count": len(user_ids),
+                    "user_ids": user_ids[:10]  # Limit for response
+                }
+                for cohort_name, user_ids in cohorts.items()
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating predictive cohorts: {str(e)}")
+
+
+@app.get("/cohorts/fairness", tags=["cohorts"], description="Analyze fairness across cohorts.")
+async def analyze_cohort_fairness():
+    """Analyze fairness metrics across cohorts."""
+    from eval.cohort_analysis import analyze_all_cohorts, analyze_fairness_across_cohorts
+    from ingest.queries import get_all_customers
+    
+    try:
+        customers = get_all_customers(DB_PATH)
+        user_ids = [c.customer_id if hasattr(c, 'customer_id') else c for c in customers]
+        
+        cohorts = analyze_all_cohorts(user_ids, DB_PATH)
+        fairness_metrics = analyze_fairness_across_cohorts(cohorts)
+        
+        return {
+            "fairness_metrics": fairness_metrics,
+            "cohort_count": len(cohorts)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing fairness: {str(e)}")
+
+
+# ============================================================================
+# Advanced Anomaly Detection Endpoints
+# ============================================================================
+
+@app.get("/anomalies/user/{user_id}", tags=["anomalies"], description="Detect user-level anomalies.")
+async def detect_user_anomalies(user_id: str):
+    """Detect anomalies for a specific user."""
+    from eval.advanced_anomaly_detection import detect_user_anomalies, prioritize_anomalies, save_user_anomaly
+    
+    try:
+        anomalies = detect_user_anomalies(user_id, DB_PATH)
+        prioritized = prioritize_anomalies(anomalies)
+        
+        # Save anomalies
+        for anomaly in prioritized:
+            save_user_anomaly(anomaly, DB_PATH)
+        
+        return {
+            "user_id": user_id,
+            "anomalies": [
+                {
+                    "anomaly_id": a.anomaly_id,
+                    "anomaly_type": a.anomaly_type.value,
+                    "severity": a.severity.value,
+                    "description": a.description,
+                    "detected_at": a.detected_at.isoformat(),
+                    "deviation_percentage": a.deviation_percentage
+                }
+                for a in prioritized
+            ],
+            "count": len(prioritized)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error detecting anomalies: {str(e)}")
 
 
 # ============================================================================

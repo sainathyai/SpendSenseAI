@@ -247,6 +247,109 @@ def analyze_all_cohorts(
     return cohorts
 
 
+def analyze_fairness_across_cohorts(
+    cohorts: Dict[str, CohortMetrics]
+) -> Dict[str, float]:
+    """
+    Analyze fairness across cohorts (outcome parity).
+    
+    Args:
+        cohorts: Dictionary of cohort analyses
+        
+    Returns:
+        Dictionary with fairness metrics
+    """
+    fairness_metrics = {}
+    
+    # Calculate persona distribution variance across cohorts
+    all_personas = set()
+    for cohort_metrics in cohorts.values():
+        all_personas.update(cohort_metrics.persona_distribution.keys())
+    
+    for persona in all_personas:
+        percentages = [
+            cohort_metrics.persona_percentages.get(persona, 0.0)
+            for cohort_metrics in cohorts.values()
+        ]
+        
+        if percentages:
+            from statistics import stdev, mean
+            avg_percentage = mean(percentages)
+            std_percentage = stdev(percentages) if len(percentages) > 1 else 0.0
+            fairness_metrics[f"{persona}_variance"] = std_percentage
+            fairness_metrics[f"{persona}_mean"] = avg_percentage
+    
+    return fairness_metrics
+
+
+def create_predictive_cohorts(
+    user_ids: List[str],
+    db_path: str
+) -> Dict[str, List[str]]:
+    """
+    Create predictive cohorts based on behavior patterns.
+    
+    Args:
+        user_ids: List of user IDs
+        db_path: Path to database
+        
+    Returns:
+        Dictionary mapping cohort names to user ID lists
+    """
+    cohorts = {
+        "high_risk": [],
+        "medium_risk": [],
+        "low_risk": [],
+        "high_potential": [],
+        "stable": []
+    }
+    
+    for user_id in user_ids:
+        try:
+            # Analyze user risk factors
+            from features.credit_utilization import analyze_credit_utilization_for_customer
+            from features.subscription_detection import detect_subscriptions_for_customer
+            
+            card_metrics, agg_metrics = analyze_credit_utilization_for_customer(user_id, db_path, 30)
+            subscriptions, sub_metrics = detect_subscriptions_for_customer(user_id, db_path, 90)
+            
+            risk_score = 0
+            
+            # High utilization = risk
+            if card_metrics and agg_metrics.aggregate_utilization > 0.70:
+                risk_score += 3
+            elif card_metrics and agg_metrics.aggregate_utilization > 0.50:
+                risk_score += 2
+            
+            # Many subscriptions = risk
+            sub_count = sub_metrics.get("subscription_count", 0)
+            if sub_count > 5:
+                risk_score += 2
+            elif sub_count > 3:
+                risk_score += 1
+            
+            # Categorize
+            if risk_score >= 4:
+                cohorts["high_risk"].append(user_id)
+            elif risk_score >= 2:
+                cohorts["medium_risk"].append(user_id)
+            elif risk_score == 0:
+                # Check for high potential (good savings, low utilization)
+                from features.savings_pattern import analyze_savings_patterns_for_customer
+                savings_accounts, savings_metrics = analyze_savings_patterns_for_customer(user_id, db_path, 180)
+                
+                if savings_accounts and savings_metrics.overall_growth_rate > 0.05:
+                    cohorts["high_potential"].append(user_id)
+                else:
+                    cohorts["stable"].append(user_id)
+            else:
+                cohorts["low_risk"].append(user_id)
+        except Exception:
+            cohorts["stable"].append(user_id)
+    
+    return cohorts
+
+
 def generate_cohort_report(
     cohorts: Dict[str, CohortMetrics],
     output_path: str
@@ -269,9 +372,17 @@ Total Cohorts: {len(cohorts)}
 Total Users Analyzed: {sum(c.user_count for c in cohorts.values())}
 
 ================================================================================
-COHORT ANALYSIS
+FAIRNESS ANALYSIS
 ================================================================================
 """
+    
+    fairness_metrics = analyze_fairness_across_cohorts(cohorts)
+    for metric, value in fairness_metrics.items():
+        report += f"{metric}: {value:.2f}\n"
+    
+    report += "\n================================================================================\n"
+    report += "COHORT ANALYSIS\n"
+    report += "================================================================================\n"
     
     for cohort_id, cohort_metrics in cohorts.items():
         cohort_name = cohort_id.replace('_', ' ').title()
