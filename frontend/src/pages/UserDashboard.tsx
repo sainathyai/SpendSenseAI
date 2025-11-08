@@ -6,12 +6,14 @@ import {
   CreditCardOutlined,
   DollarOutlined,
   LineChartOutlined,
+  LockOutlined,
   RiseOutlined,
   ThunderboltOutlined,
+  UnlockOutlined,
   UserOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Badge,
@@ -28,6 +30,7 @@ import {
   Space,
   Spin,
   Statistic,
+  Switch,
   Tabs,
   Tag,
   Typography,
@@ -286,6 +289,46 @@ const UserDashboard = () => {
     enabled: !!userId,
   });
 
+  // Fetch consent status
+  const { data: consentData, isLoading: consentLoading } = useQuery({
+    queryKey: ['user-consent', userId],
+    queryFn: () => api.getConsent(userId!),
+    enabled: !!userId,
+  });
+
+  // Query client for invalidating queries
+  const queryClient = useQueryClient();
+
+  // Consent toggle mutation
+  const consentMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      if (enabled) {
+        return api.grantConsent(userId!, 'all');
+      } else {
+        return api.revokeConsent(userId!);
+      }
+    },
+    onSuccess: (_, enabled) => {
+      message.success(enabled ? 'Consent granted successfully' : 'Consent revoked successfully');
+      // Invalidate consent query to refetch
+      queryClient.invalidateQueries({ queryKey: ['user-consent', userId] });
+      // Invalidate recommendations to refetch
+      queryClient.invalidateQueries({ queryKey: ['user-recommendations', userId] });
+    },
+    onError: (error: any) => {
+      message.error('Failed to update consent: ' + (error.response?.data?.detail || error.message));
+    },
+  });
+
+  // Handle consent toggle
+  const handleConsentToggle = useCallback((checked: boolean) => {
+    consentMutation.mutate(checked);
+  }, [consentMutation]);
+
+  // Check if user has active consent
+  const hasActiveConsent = consentData?.data && consentData.data.length > 0 && 
+    consentData.data.some((c: any) => c.status === 'active');
+
   // Synthesize APR for credit cards - MUST be before early returns (Rules of Hooks)
   const synthesizeAPR = useCallback((balance: number, utilization: number): number => {
     const baseAPR = 18.0;
@@ -432,6 +475,50 @@ const UserDashboard = () => {
       <Title level={2}>💰 Your Financial Dashboard</Title>
       <Text type="secondary">Welcome back! Here's your personalized financial overview.</Text>
       <Divider />
+
+      {/* Consent Toggle Section */}
+      <Card
+        style={{
+          marginBottom: 24,
+          background: hasActiveConsent ? 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)' : 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+          border: 'none',
+        }}
+      >
+        <Row gutter={16} align="middle">
+          <Col flex="auto">
+            <Space direction="vertical" size="small">
+              <Title level={4} style={{ color: '#fff', margin: 0 }}>
+                {hasActiveConsent ? <UnlockOutlined /> : <LockOutlined />}
+                {' '}AI Personalization {hasActiveConsent ? 'Enabled' : 'Disabled'}
+              </Title>
+              <Text style={{ color: 'rgba(255, 255, 255, 0.9)' }}>
+                {hasActiveConsent 
+                  ? 'You are receiving personalized recommendations and insights based on your financial data.'
+                  : 'Enable AI personalization to receive tailored financial recommendations and insights.'}
+              </Text>
+            </Space>
+          </Col>
+          <Col>
+            <Space direction="vertical" align="center">
+              <Switch
+                checked={hasActiveConsent}
+                onChange={handleConsentToggle}
+                loading={consentMutation.isPending || consentLoading}
+                checkedChildren="ON"
+                unCheckedChildren="OFF"
+                style={{
+                  minWidth: '60px',
+                  backgroundColor: hasActiveConsent ? '#fff' : 'rgba(255, 255, 255, 0.3)',
+                }}
+                disabled={consentMutation.isPending}
+              />
+              <Text style={{ color: '#fff', fontSize: '12px' }}>
+                {hasActiveConsent ? 'Consent Granted' : 'No Consent'}
+              </Text>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
 
       {/* Key Insights Section */}
       <Card
