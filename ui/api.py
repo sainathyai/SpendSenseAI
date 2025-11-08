@@ -1648,6 +1648,81 @@ async def detect_user_anomalies(user_id: str):
 # Admin / Maintenance Endpoints
 # ============================================================================
 
+@app.post("/admin/reseed-liabilities")
+async def reseed_liabilities_endpoint():
+    """
+    Reload liabilities data from CSV (for admin use).
+    """
+    from pathlib import Path
+    from ingest.database import get_connection, load_from_csv
+    
+    try:
+        data_dir = Path("data/processed")
+        
+        # Delete existing liabilities
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM credit_card_liabilities")
+            conn.commit()
+        
+        # Reload from CSV
+        liabilities_file = data_dir / "liabilities.csv"
+        
+        if not liabilities_file.exists():
+            return {
+                "status": "error",
+                "message": f"liabilities.csv not found in {data_dir.absolute()}"
+            }
+        
+        # Load liabilities
+        import csv
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            with open(liabilities_file, 'r') as f:
+                reader = csv.DictReader(f)
+                count = 0
+                for row in reader:
+                    cursor.execute("""
+                        INSERT INTO credit_card_liabilities (
+                            account_id, apr_type, apr_percentage, minimum_payment_amount,
+                            last_payment_amount, is_overdue, next_payment_due_date,
+                            last_statement_balance
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        row['account_id'],
+                        row.get('apr_type', 'purchase_apr'),
+                        float(row['apr_percentage']) if row.get('apr_percentage') else 0.0,
+                        float(row['minimum_payment_amount']) if row.get('minimum_payment_amount') else 0.0,
+                        float(row['last_payment_amount']) if row.get('last_payment_amount') else None,
+                        int(row['is_overdue']) if row.get('is_overdue') else 0,
+                        row.get('next_payment_due_date'),
+                        float(row['last_statement_balance']) if row.get('last_statement_balance') else None
+                    ))
+                    count += 1
+            conn.commit()
+        
+        # Count overdue
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM credit_card_liabilities WHERE is_overdue = 1")
+            overdue_count = cursor.fetchone()[0]
+        
+        return {
+            "status": "success",
+            "message": "Liabilities reloaded successfully",
+            "liabilities_loaded": count,
+            "overdue_accounts": overdue_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @app.post("/admin/grant-all-consent")
 async def grant_all_consent_endpoint():
     """
