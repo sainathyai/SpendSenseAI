@@ -1046,10 +1046,10 @@ const UserDashboard = () => {
                       style={{ marginBottom: 24 }}
                     />
                     {recsLoading ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
-                        <Spin size="large" />
-                      </div>
-                    ) : recommendations?.education_items && recommendations.education_items.length > 0 ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                    <Spin size="large" />
+                  </div>
+                ) : recommendations?.education_items && recommendations.education_items.length > 0 ? (
                   <List
                     dataSource={recommendations.education_items}
                     renderItem={(item: RecommendationItem, index: number) => (
