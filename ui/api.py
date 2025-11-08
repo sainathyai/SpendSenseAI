@@ -1648,6 +1648,59 @@ async def detect_user_anomalies(user_id: str):
 # Admin / Maintenance Endpoints
 # ============================================================================
 
+@app.post("/admin/recalculate-overdue")
+async def recalculate_overdue_endpoint():
+    """
+    Manually trigger overdue status recalculation (for admin use).
+    """
+    from datetime import date, timedelta
+    from ingest.database import get_connection
+    
+    try:
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            
+            # Move all payment due dates back by 30 days to simulate overdue
+            cursor.execute("""
+                UPDATE credit_card_liabilities
+                SET next_payment_due_date = date(next_payment_due_date, '-30 days')
+                WHERE next_payment_due_date IS NOT NULL
+            """)
+            
+            # Set is_overdue = 1 for cards with balance > 0 and due date in the past
+            cursor.execute("""
+                UPDATE credit_card_liabilities
+                SET is_overdue = 1
+                WHERE next_payment_due_date < date('now')
+                AND account_id IN (
+                    SELECT account_id FROM accounts WHERE balances_current > 0
+                )
+            """)
+            
+            # Count overdue accounts
+            cursor.execute("""
+                SELECT COUNT(*) FROM credit_card_liabilities
+                WHERE is_overdue = 1
+            """)
+            overdue_count = cursor.fetchone()[0]
+            
+            conn.commit()
+            
+        return {
+            "status": "success",
+            "message": "Overdue status recalculated",
+            "overdue_accounts": overdue_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @app.post("/admin/seed-database")
 async def seed_database_endpoint():
     """
