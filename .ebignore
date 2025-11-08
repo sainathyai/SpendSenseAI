@@ -63,6 +63,7 @@ Dockerfile
 data/raw/
 # Don't include local SQLite database in deployment
 data/spendsense.db
+# NOTE: data/processed/ IS included by default (not excluded)
 
 # Deployment files
 DEPLOYMENT_QUICKSTART.md

@@ -1645,12 +1645,269 @@ async def detect_user_anomalies(user_id: str):
 
 
 # ============================================================================
+# Admin / Maintenance Endpoints
+# ============================================================================
+
+@app.post("/admin/reseed-liabilities")
+async def reseed_liabilities_endpoint():
+    """
+    Reload liabilities data from CSV (for admin use).
+    """
+    from pathlib import Path
+    from ingest.database import get_connection, load_from_csv
+    
+    try:
+        data_dir = Path("data/processed")
+        
+        # Delete existing liabilities
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM credit_card_liabilities")
+            conn.commit()
+        
+        # Reload from CSV
+        liabilities_file = data_dir / "liabilities.csv"
+        
+        if not liabilities_file.exists():
+            return {
+                "status": "error",
+                "message": f"liabilities.csv not found in {data_dir.absolute()}"
+            }
+        
+        # Load liabilities
+        import csv
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            with open(liabilities_file, 'r') as f:
+                reader = csv.DictReader(f)
+                count = 0
+                for row in reader:
+                    cursor.execute("""
+                        INSERT INTO credit_card_liabilities (
+                            account_id, apr_type, apr_percentage, minimum_payment_amount,
+                            last_payment_amount, is_overdue, next_payment_due_date,
+                            last_statement_balance
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        row['account_id'],
+                        row.get('apr_type', 'purchase_apr'),
+                        float(row['apr_percentage']) if row.get('apr_percentage') else 0.0,
+                        float(row['minimum_payment_amount']) if row.get('minimum_payment_amount') else 0.0,
+                        float(row['last_payment_amount']) if row.get('last_payment_amount') else None,
+                        int(row['is_overdue']) if row.get('is_overdue') else 0,
+                        row.get('next_payment_due_date'),
+                        float(row['last_statement_balance']) if row.get('last_statement_balance') else None
+                    ))
+                    count += 1
+            conn.commit()
+        
+        # Count overdue
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM credit_card_liabilities WHERE is_overdue = 1")
+            overdue_count = cursor.fetchone()[0]
+        
+        return {
+            "status": "success",
+            "message": "Liabilities reloaded successfully",
+            "liabilities_loaded": count,
+            "overdue_accounts": overdue_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/admin/grant-all-consent")
+async def grant_all_consent_endpoint():
+    """
+    Grant consent to all customers (for admin use).
+    """
+    from guardrails.consent import grant_consent, ConsentScope
+    from ingest.database import get_connection
+    
+    try:
+        # Get all customer IDs
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT DISTINCT customer_id FROM accounts ORDER BY customer_id')
+            customers = [row[0] for row in cursor.fetchall()]
+        
+        # Grant consent to each customer
+        granted_count = 0
+        for customer_id in customers:
+            try:
+                grant_consent(
+                    customer_id, 
+                    DB_PATH, 
+                    scope=ConsentScope.ALL,
+                    notes="Auto-granted consent for demo"
+                )
+                granted_count += 1
+            except Exception as e:
+                print(f"Error granting consent to {customer_id}: {e}")
+        
+        return {
+            "status": "success",
+            "message": f"Consent granted to {granted_count} customers",
+            "total_customers": len(customers),
+            "granted": granted_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/admin/recalculate-overdue")
+async def recalculate_overdue_endpoint():
+    """
+    Manually trigger overdue status recalculation (for admin use).
+    """
+    from datetime import date, timedelta
+    from ingest.database import get_connection
+    
+    try:
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            
+            # Move all payment due dates back by 30 days to simulate overdue
+            cursor.execute("""
+                UPDATE credit_card_liabilities
+                SET next_payment_due_date = date(next_payment_due_date, '-30 days')
+                WHERE next_payment_due_date IS NOT NULL
+            """)
+            
+            # Set is_overdue = 1 for cards with balance > 0 and due date in the past
+            cursor.execute("""
+                UPDATE credit_card_liabilities
+                SET is_overdue = 1
+                WHERE next_payment_due_date < date('now')
+                AND account_id IN (
+                    SELECT account_id FROM accounts WHERE balances_current > 0
+                )
+            """)
+            
+            # Count overdue accounts
+            cursor.execute("""
+                SELECT COUNT(*) FROM credit_card_liabilities
+                WHERE is_overdue = 1
+            """)
+            overdue_count = cursor.fetchone()[0]
+            
+            conn.commit()
+            
+        return {
+            "status": "success",
+            "message": "Overdue status recalculated",
+            "overdue_accounts": overdue_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/admin/seed-database")
+async def seed_database_endpoint():
+    """
+    Manually trigger database seeding (for admin use).
+    """
+    from pathlib import Path
+    from ingest.database import get_connection
+    
+    try:
+        # Check if database is already seeded
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM accounts")
+            count = cursor.fetchone()[0]
+            
+            if count > 0:
+                return {
+                    "status": "skipped",
+                    "message": f"Database already contains {count} accounts",
+                    "accounts": count
+                }
+        
+        # Check if data files exist
+        data_dir = Path("data/processed")
+        accounts_file = data_dir / "accounts.csv"
+        
+        if not data_dir.exists():
+            return {
+                "status": "error",
+                "message": f"Data directory not found: {data_dir.absolute()}"
+            }
+        
+        if not accounts_file.exists():
+            files = list(data_dir.glob("*.csv"))
+            return {
+                "status": "error",
+                "message": f"accounts.csv not found in {data_dir.absolute()}",
+                "available_files": [f.name for f in files]
+            }
+        
+        # Seed the database
+        from ingest.database import load_from_csv
+        accounts_file = data_dir / "accounts.csv"
+        transactions_file = data_dir / "transactions.csv"
+        liabilities_file = data_dir / "liabilities.csv"
+        
+        counts = load_from_csv(
+            str(accounts_file),
+            str(transactions_file),
+            str(liabilities_file),
+            DB_PATH
+        )
+        
+        # Verify seeding
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM accounts")
+            account_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM transactions")
+            tx_count = cursor.fetchone()[0]
+        
+        return {
+            "status": "success",
+            "message": "Database seeded successfully",
+            "accounts": account_count,
+            "transactions": tx_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+# ============================================================================
 # Startup
 # ============================================================================
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize database tables on startup."""
+    import os
+    from pathlib import Path
+    
     # Ensure core data tables exist
     create_database(DB_PATH)
 
@@ -1665,6 +1922,43 @@ async def startup_event():
     # Initialize A/B testing tables
     from eval.ab_testing import create_ab_testing_tables
     create_ab_testing_tables(DB_PATH)
+    
+    # Initialize consent tables
+    from guardrails.consent import create_consent_tables
+    create_consent_tables(DB_PATH)
+    
+    # Auto-seed database if empty
+    try:
+        from ingest.database import get_connection
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM accounts")
+            count = cursor.fetchone()[0]
+            
+            if count == 0:
+                print("[STARTUP] Database is empty, attempting to seed...")
+                data_dir = Path("data/processed")
+                if data_dir.exists() and (data_dir / "accounts.csv").exists():
+                    print(f"[STARTUP] Found data files in {data_dir}, seeding database...")
+                    from ingest.database import load_from_csv
+                    accounts_file = data_dir / "accounts.csv"
+                    transactions_file = data_dir / "transactions.csv"
+                    liabilities_file = data_dir / "liabilities.csv"
+                    counts = load_from_csv(
+                        str(accounts_file),
+                        str(transactions_file),
+                        str(liabilities_file),
+                        DB_PATH
+                    )
+                    print(f"[STARTUP] Database seeding completed: {counts['accounts']} accounts, {counts['transactions']} transactions")
+                else:
+                    print(f"[STARTUP] WARNING: data/processed not found or accounts.csv missing")
+            else:
+                print(f"[STARTUP] Database already contains {count} accounts, skipping seed")
+    except Exception as e:
+        print(f"[STARTUP] Error during database seeding: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
