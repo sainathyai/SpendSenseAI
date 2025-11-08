@@ -63,6 +63,10 @@ Dockerfile
 data/raw/
 # Don't include local SQLite database in deployment
 data/spendsense.db
+# IMPORTANT: Include processed data for seeding
+!data/processed/
+!data/processed/*.csv
+!data/processed/*.json
 
 # Deployment files
 DEPLOYMENT_QUICKSTART.md
