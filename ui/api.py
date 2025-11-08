@@ -1651,6 +1651,9 @@ async def detect_user_anomalies(user_id: str):
 @app.on_event("startup")
 async def startup_event():
     """Initialize database tables on startup."""
+    import os
+    from pathlib import Path
+    
     # Ensure core data tables exist
     create_database(DB_PATH)
 
@@ -1665,6 +1668,31 @@ async def startup_event():
     # Initialize A/B testing tables
     from eval.ab_testing import create_ab_testing_tables
     create_ab_testing_tables(DB_PATH)
+    
+    # Auto-seed database if empty
+    try:
+        from ingest.database import get_connection
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM accounts")
+            count = cursor.fetchone()[0]
+            
+            if count == 0:
+                print("[STARTUP] Database is empty, attempting to seed...")
+                data_dir = Path("data/processed")
+                if data_dir.exists() and (data_dir / "accounts.csv").exists():
+                    print(f"[STARTUP] Found data files in {data_dir}, seeding database...")
+                    from ingest.load_data import load_data
+                    load_data(str(data_dir), DB_PATH, "csv", check_integrity=True)
+                    print("[STARTUP] Database seeding completed successfully")
+                else:
+                    print(f"[STARTUP] WARNING: data/processed not found or accounts.csv missing")
+            else:
+                print(f"[STARTUP] Database already contains {count} accounts, skipping seed")
+    except Exception as e:
+        print(f"[STARTUP] Error during database seeding: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
