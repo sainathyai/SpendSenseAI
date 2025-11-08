@@ -1750,6 +1750,10 @@ async def startup_event():
     from eval.ab_testing import create_ab_testing_tables
     create_ab_testing_tables(DB_PATH)
     
+    # Initialize consent tables
+    from guardrails.consent import create_consent_tables
+    create_consent_tables(DB_PATH)
+    
     # Auto-seed database if empty
     try:
         from ingest.database import get_connection
