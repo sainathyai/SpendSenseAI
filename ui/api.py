@@ -1645,6 +1645,78 @@ async def detect_user_anomalies(user_id: str):
 
 
 # ============================================================================
+# Admin / Maintenance Endpoints
+# ============================================================================
+
+@app.post("/admin/seed-database")
+async def seed_database_endpoint():
+    """
+    Manually trigger database seeding (for admin use).
+    """
+    from pathlib import Path
+    from ingest.database import get_connection
+    
+    try:
+        # Check if database is already seeded
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM accounts")
+            count = cursor.fetchone()[0]
+            
+            if count > 0:
+                return {
+                    "status": "skipped",
+                    "message": f"Database already contains {count} accounts",
+                    "accounts": count
+                }
+        
+        # Check if data files exist
+        data_dir = Path("data/processed")
+        accounts_file = data_dir / "accounts.csv"
+        
+        if not data_dir.exists():
+            return {
+                "status": "error",
+                "message": f"Data directory not found: {data_dir.absolute()}"
+            }
+        
+        if not accounts_file.exists():
+            files = list(data_dir.glob("*.csv"))
+            return {
+                "status": "error",
+                "message": f"accounts.csv not found in {data_dir.absolute()}",
+                "available_files": [f.name for f in files]
+            }
+        
+        # Seed the database
+        from ingest.load_data import load_data
+        load_data(str(data_dir), DB_PATH, "csv", check_integrity=True)
+        
+        # Verify seeding
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM accounts")
+            account_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM transactions")
+            tx_count = cursor.fetchone()[0]
+        
+        return {
+            "status": "success",
+            "message": "Database seeded successfully",
+            "accounts": account_count,
+            "transactions": tx_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+# ============================================================================
 # Startup
 # ============================================================================
 
