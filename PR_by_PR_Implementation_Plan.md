@@ -77,24 +77,45 @@ YES. SpendSenseAI is fundamentally a **backend service** that:
 
 ---
 
-#### **PR #3: Synthetic Data Generator**
-**Purpose:** Create realistic transaction data for 50-100 users
+#### **PR #3: Data Synthesis & Transformation Engine**
+**Purpose:** Transform existing Capital One CSV data into Plaid-compatible format with precision
 **Scope:**
-- User profile generator (income levels, credit behaviors, saving patterns)
-- Account generator (checking, savings, credit cards, money market, HSA)
-- Transaction generator with realistic patterns:
-  - Income deposits (payroll, biweekly/monthly)
-  - Recurring subscriptions (monthly cadence)
-  - Variable expenses (groceries, dining, gas)
-  - Fixed expenses (rent, utilities)
-- Liability generator (credit card APRs, balances, payment history)
-- Diversity controls (income distribution, credit mix, savings behaviors)
-- Export to CSV/JSON
-- Deterministic generation (seeded randomness)
+- **Phase 1: Account Discovery & Synthesis**
+  - Analyze payment_method patterns to identify distinct accounts per customer
+  - Synthesize account_id for each account (deterministic mapping)
+  - Calculate account balances precisely from transaction history
+  - Estimate credit limits accurately from balance patterns
+  - Identify account types (checking, savings, credit card, money market, HSA)
+  - Create accounts table with all required fields
+- **Phase 2: Transaction Enhancement**
+  - Map transactions to accounts (add account_id to each transaction)
+  - Generate merchant_name deterministically from merchant_id + category
+  - Transform merchant_category to Plaid personal_finance_category (primary/detailed)
+  - Map payment_method to payment_channel (Plaid format)
+  - Map status to pending boolean
+  - Validate transaction data integrity
+- **Phase 3: Liability Synthesis**
+  - Extract credit card payment history from transactions
+  - Calculate minimum_payment_amount accurately (industry standard: 2% or $25)
+  - Synthesize APR based on utilization tiers (18.99% - 28.99% range)
+  - Determine is_overdue status from payment patterns
+  - Estimate next_payment_due_date from payment history
+  - Calculate last_statement_balance
+  - Create liabilities table for credit cards
+- **Validation & Quality Checks**
+  - Data integrity validation (no orphaned transactions, no duplicate accounts)
+  - Balance math validation (balance = previous_balance - amount)
+  - Credit limit validation (limit >= max_balance)
+  - Utilization validation (utilization <= 100%)
+  - APR validation (realistic range: 15-30%)
+- Export to Plaid-compatible format (CSV/JSON)
+- Precision metrics reporting (account mapping %, balance accuracy, etc.)
+- Unit tests for synthesis algorithms
+- Documentation of synthesis rules and precision
 
-**Dependencies:** PR #2
-**Estimated Effort:** 12-16 hours
-**Review Focus:** Data realism, diversity, no PII
+**Dependencies:** PR #2 (Schema definitions needed before synthesis)
+**Estimated Effort:** 14-18 hours
+**Review Focus:** Precision, accuracy, zero data loss, Plaid compliance
 
 ---
 

@@ -1,0 +1,71 @@
+# Elastic Beanstalk ignore file
+# Similar to .gitignore but for EB deployments
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-user/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Scripts (not needed in deployment)
+scripts/
+
+# AWS configs (not needed in deployment)
+aws/
+amplify.yml
+apprunner.yaml
+apprunner-config.json
+Dockerfile
+.dockerignore
+
+# Data files
+data/raw/
+# Don't include local SQLite database in deployment
+data/spendsense.db
+# NOTE: data/processed/ IS included by default (not excluded)
+
+# Deployment files
+DEPLOYMENT_QUICKSTART.md
+docs/AWS_*.md
+

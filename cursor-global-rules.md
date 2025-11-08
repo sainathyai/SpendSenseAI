@@ -1,0 +1,34 @@
+# Cursor Global Rules - Terminal Process Management
+
+**CRITICAL: Always ensure terminal processes close properly**
+
+When using `run_terminal_cmd`:
+1. **Always configure git to not use pager**: Use `git config --global core.pager cat` or `git --no-pager` for git commands
+2. **Add explicit exit codes**: Scripts should end with `exit 0` (success) or `exit 1` (failure)
+3. **Use non-interactive flags**: Add `--yes`, `-y`, `--no-prompt` flags where available
+4. **Avoid commands that wait for input**: Use environment variables or config files instead of interactive prompts
+5. **Set proper error handling**: Use `$ErrorActionPreference = "Stop"` in PowerShell scripts
+6. **Close processes explicitly**: Batch files should use `exit /b %ERRORLEVEL%` to properly close
+7. **Never leave processes hanging**: If a command might hang, add timeout or use background execution with proper cleanup
+8. **Always terminate commands**: Ensure every command completes and doesn't wait for input
+9. **Use explicit termination**: Add `| cat` to commands that might use pagers, or use `--no-pager` flags
+10. **Close terminal sessions**: After running commands, ensure the terminal session is properly closed
+
+## Best Practices:
+- For git commands: Always use `--no-pager` or configure `core.pager = cat`
+- For PowerShell: Use `-NoProfile` and `-ExecutionPolicy Bypass` flags
+- For batch files: Always end with explicit exit codes
+- For long-running commands: Use background execution (`is_background: true`) or add timeouts
+- Always check `$LASTEXITCODE` or `%ERRORLEVEL%` before proceeding
+
+## Example:
+```powershell
+# Good: Explicit exit and no pager
+git config --global core.pager cat
+git status --porcelain
+exit 0
+
+# Bad: May hang waiting for pager
+git status
+```
+

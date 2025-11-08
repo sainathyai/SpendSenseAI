@@ -1,0 +1,56 @@
+QUICK DEPLOYMENT COMMANDS
+==========================
+
+Run these commands in PowerShell (not Git Bash):
+
+1. Navigate to project directory:
+   cd "C:\Users\Sainatha Yatham\Documents\GauntletAI\Week4\SpendSenseAI"
+
+2. Run the deployment script:
+   .\scripts\deploy_amplify_simple.ps1
+
+OR run these commands manually:
+
+STEP 1: Get Amplify CNAMEs
+---------------------------
+aws amplify get-domain-association --app-id dvukd3zjye01u --domain-name admin.spendsenseai.sainathyai.com --region us-east-1
+aws amplify get-domain-association --app-id d2yncedb4tyu2y --domain-name user.spendsenseai.sainathyai.com --region us-east-1
+
+STEP 2: Create Route53 Records (replace CNAME values from Step 1)
+------------------------------------------------------------------
+aws route53 change-resource-record-sets --hosted-zone-id Z0882306KADD7M9CEUFD --change-batch file://operator-route53.json
+aws route53 change-resource-record-sets --hosted-zone-id Z0882306KADD7M9CEUFD --change-batch file://user-route53.json
+
+STEP 3: Update Environment Variables
+------------------------------------
+aws amplify update-app --app-id dvukd3zjye01u --environment-variables "VITE_API_BASE_URL=https://spendsenseai-env.eba-wmiq25te.us-east-1.elasticbeanstalk.com" --region us-east-1
+aws amplify update-app --app-id d2yncedb4tyu2y --environment-variables "VITE_API_BASE_URL=https://spendsenseai-env.eba-wmiq25te.us-east-1.elasticbeanstalk.com" --region us-east-1
+
+STEP 4: Configure Build Settings in Amplify Console
+----------------------------------------------------
+Go to: https://console.aws.amazon.com/amplify
+
+For Operator Dashboard (dvukd3zjye01u):
+- Base directory: frontend
+- Build command: npm ci && npm run build:operator
+- Output directory: dist
+- Build spec: frontend/amplify-operator.yml
+
+For User Dashboard (d2yncedb4tyu2y):
+- Base directory: frontend
+- Build command: npm ci && npm run build:user
+- Output directory: dist-user
+- Build spec: frontend/amplify-user.yml
+
+STEP 5: Connect GitHub Repository
+-----------------------------------
+For each app in Amplify Console:
+- Connect GitHub: sainathyai/SpendSenseAI
+- Branch: main
+
+STEP 6: Deploy
+--------------
+- Push to main branch (auto-deploy)
+- Or trigger manually in Amplify Console
+
+

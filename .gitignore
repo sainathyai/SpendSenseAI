@@ -49,10 +49,9 @@ venv.bak/
 *.sqlite
 *.sqlite3
 
-# Data files (except samples)
+# Data files (except raw samples)
 data/raw/*.csv
 data/raw/*.json
-data/processed/*.parquet
 !data/raw/sample_*.csv
 !data/raw/sample_*.json
 
@@ -77,3 +76,8 @@ Thumbs.db
 *.tmp
 *.temp
 
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

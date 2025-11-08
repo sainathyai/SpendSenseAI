@@ -1,0 +1,40 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd frontend
+        - npm ci
+        - echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
+    build:
+      commands:
+        - echo "Building with VITE_API_BASE_URL=$VITE_API_BASE_URL"
+        - npm run build:user
+  artifacts:
+    baseDirectory: frontend/dist-user
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - frontend/node_modules/**/*
+customHeaders:
+  - pattern: '**/*'
+    headers:
+      - key: 'X-Content-Type-Options'
+        value: 'nosniff'
+      - key: 'X-Frame-Options'
+        value: 'DENY'
+      - key: 'X-XSS-Protection'
+        value: '1; mode=block'
+  - pattern: '/<*>'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-cache, no-store, must-revalidate'
+customRedirects:
+  - source: '/<*>'
+    target: '/index.html'
+    status: '200'
+
+
+
+

@@ -5,12 +5,16 @@ numpy>=1.24.0
 pyarrow>=12.0.0  # For Parquet support
 
 # Database
-sqlite3  # Standard library, but documented here
+# sqlite3 is built into Python standard library, no installation needed
 
 # API Framework (choose one)
 fastapi>=0.104.0
 uvicorn>=0.24.0  # ASGI server for FastAPI
 pydantic>=2.0.0  # Data validation
+
+# Dashboard UI
+streamlit>=1.28.0  # Operator dashboard
+requests>=2.31.0  # HTTP client for API calls
 
 # Testing
 pytest>=7.4.0
@@ -34,4 +38,10 @@ isort>=5.12.0  # Import sorting
 # Documentation
 mkdocs>=1.5.0  # Optional: for building docs
 mkdocs-material>=9.4.0  # Optional: Material theme for docs
+
+# LLM Integration
+openai>=1.12.0  # OpenAI API for tone-controlled text generation
+
+# AWS Integration (optional, for production security)
+boto3>=1.34.0  # AWS SDK for Secrets Manager and Lambda proxy
 
