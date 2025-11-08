@@ -1689,8 +1689,17 @@ async def seed_database_endpoint():
             }
         
         # Seed the database
-        from ingest.load_data import load_data
-        load_data(str(data_dir), DB_PATH, "csv", check_integrity=True)
+        from ingest.database import load_from_csv
+        accounts_file = data_dir / "accounts.csv"
+        transactions_file = data_dir / "transactions.csv"
+        liabilities_file = data_dir / "liabilities.csv"
+        
+        counts = load_from_csv(
+            str(accounts_file),
+            str(transactions_file),
+            str(liabilities_file),
+            DB_PATH
+        )
         
         # Verify seeding
         with get_connection(DB_PATH) as conn:
@@ -1754,9 +1763,17 @@ async def startup_event():
                 data_dir = Path("data/processed")
                 if data_dir.exists() and (data_dir / "accounts.csv").exists():
                     print(f"[STARTUP] Found data files in {data_dir}, seeding database...")
-                    from ingest.load_data import load_data
-                    load_data(str(data_dir), DB_PATH, "csv", check_integrity=True)
-                    print("[STARTUP] Database seeding completed successfully")
+                    from ingest.database import load_from_csv
+                    accounts_file = data_dir / "accounts.csv"
+                    transactions_file = data_dir / "transactions.csv"
+                    liabilities_file = data_dir / "liabilities.csv"
+                    counts = load_from_csv(
+                        str(accounts_file),
+                        str(transactions_file),
+                        str(liabilities_file),
+                        DB_PATH
+                    )
+                    print(f"[STARTUP] Database seeding completed: {counts['accounts']} accounts, {counts['transactions']} transactions")
                 else:
                     print(f"[STARTUP] WARNING: data/processed not found or accounts.csv missing")
             else:
