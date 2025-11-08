@@ -1648,6 +1648,51 @@ async def detect_user_anomalies(user_id: str):
 # Admin / Maintenance Endpoints
 # ============================================================================
 
+@app.post("/admin/grant-all-consent")
+async def grant_all_consent_endpoint():
+    """
+    Grant consent to all customers (for admin use).
+    """
+    from guardrails.consent import grant_consent, ConsentScope
+    from ingest.database import get_connection
+    
+    try:
+        # Get all customer IDs
+        with get_connection(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT DISTINCT customer_id FROM accounts ORDER BY customer_id')
+            customers = [row[0] for row in cursor.fetchall()]
+        
+        # Grant consent to each customer
+        granted_count = 0
+        for customer_id in customers:
+            try:
+                grant_consent(
+                    customer_id, 
+                    DB_PATH, 
+                    scope=ConsentScope.ALL,
+                    notes="Auto-granted consent for demo"
+                )
+                granted_count += 1
+            except Exception as e:
+                print(f"Error granting consent to {customer_id}: {e}")
+        
+        return {
+            "status": "success",
+            "message": f"Consent granted to {granted_count} customers",
+            "total_customers": len(customers),
+            "granted": granted_count
+        }
+        
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 @app.post("/admin/recalculate-overdue")
 async def recalculate_overdue_endpoint():
     """
