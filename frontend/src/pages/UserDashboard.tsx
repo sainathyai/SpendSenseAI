@@ -853,7 +853,15 @@ const UserDashboard = () => {
             ),
             children: (
               <div>
-                {recsLoading ? (
+                {!hasActiveConsent ? (
+                  <Alert
+                    message="Consent Required"
+                    description="Please enable AI Personalization at the top of the page to receive personalized recommendations."
+                    type="warning"
+                    showIcon
+                    icon={<LockOutlined />}
+                  />
+                ) : recsLoading ? (
                   <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
                     <Spin size="large" />
                   </div>
@@ -1020,14 +1028,24 @@ const UserDashboard = () => {
             ),
             children: (
               <div>
-                <Alert
-                  message="Educational Content"
-                  description="Access personalized financial education content based on your persona and financial situation."
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 24 }}
-                />
-                {recsLoading ? (
+                {!hasActiveConsent ? (
+                  <Alert
+                    message="Consent Required"
+                    description="Please enable AI Personalization at the top of the page to access personalized educational content."
+                    type="warning"
+                    showIcon
+                    icon={<LockOutlined />}
+                  />
+                ) : (
+                  <>
+                    <Alert
+                      message="Educational Content"
+                      description="Access personalized financial education content based on your persona and financial situation."
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 24 }}
+                    />
+                    {recsLoading ? (
                   <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
                     <Spin size="large" />
                   </div>
@@ -1104,6 +1122,8 @@ const UserDashboard = () => {
                     type="info"
                     showIcon
                   />
+                )}
+                  </>
                 )}
               </div>
             ),
